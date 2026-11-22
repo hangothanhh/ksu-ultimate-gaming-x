@@ -1,0 +1,59 @@
+name: CI Validation
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Build ZIP & Run POSIX/Mock Verification (Stages 1-6)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate module.prop required metadata
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          props = {}
+          for raw in Path("module/module.prop").read_text(encoding="utf-8").splitlines():
+              if "=" in raw and not raw.lstrip().startswith("#"):
+                  k, v = raw.split("=", 1)
+                  props[k.strip()] = v.strip()
+          for req in ("id", "name", "version", "versionCode", "author", "description"):
+              assert props.get(req), f"Missing required module.prop key: {req}"
+          assert props["version"].startswith("v"), f"Invalid version format: {props['version']}"
+          print("Validated module.prop:", props["id"], props["version"], props["versionCode"])
+          PY
+
+      - name: Package KernelSU Module ZIP
+        run: python3 -u scripts/build_zip.py
+
+      - name: Run Verification Suite (Stages 1-6)
+        run: python3 -u tests/verify_all.py --skip-apk
+
+      - name: Print Build Checksum (SHA-256)
+        run: |
+          sha256sum dist/KSU-Ultimate-Gaming-X-v1.0.0.zip
+          cat dist/KSU-Ultimate-Gaming-X-v1.0.0.zip.sha256
+
+      - name: Upload Module ZIP Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ksu-ultimate-gaming-x-module-zip
+          path: |
+            dist/KSU-Ultimate-Gaming-X-v1.0.0.zip
+            dist/KSU-Ultimate-Gaming-X-v1.0.0.zip.sha256
+          if-no-files-found: error
