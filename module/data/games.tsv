@@ -1,0 +1,32 @@
+# package	name	engine_max_fps	limit_type	default_target_fps	default_mode	preferred_adreno	preferred_mali	need_fingerprint	gpu_load	touch_profile	notes
+com.tencent.ig	PUBG Mobile (Global)	120	WHITELIST	120	high_performance	rog_phone_9_pro	redmi_k80_ultra	0	high	esports	90/120 FPS Ultra Extreme gated by device whitelist; requires capable GPU + 120Hz display.
+com.vng.pubgmobile	PUBG Mobile (VN)	120	WHITELIST	120	high_performance	rog_phone_9_pro	redmi_k80_ultra	0	high	esports	VN client shares Tencent whitelist rules for 90/120 FPS modes.
+com.pubg.krmobile	PUBG Mobile (KR)	120	WHITELIST	120	high_performance	rog_phone_9_pro	redmi_k80_ultra	0	high	esports	KR client whitelist-gated 90/120 FPS.
+com.pubg.imobile	Battlegrounds Mobile India (BGMI)	120	WHITELIST	120	high_performance	rog_phone_9_pro	redmi_k80_ultra	0	high	esports	Krafton BGMI whitelist-gated 90/120 FPS.
+com.activision.callofduty.shooter	Call of Duty: Mobile (Global)	120	WHITELIST	120	high_performance	xperia_1_v	redmi_k80_ultra	0	high	esports	Ultra Frame Rate (120 FPS) whitelisted for Sony Xperia, ROG Phone, RedMagic, Xiaomi flagships.
+com.garena.game.codm	Call of Duty: Mobile (Garena)	120	WHITELIST	120	high_performance	xperia_1_v	redmi_k80_ultra	0	high	esports	Garena SEA CODM 120 FPS Ultra Frame Rate whitelist.
+com.vng.codmvn	Call of Duty: Mobile (VN)	120	WHITELIST	120	high_performance	xperia_1_v	redmi_k80_ultra	0	high	esports	VNG CODM 120 FPS Ultra Frame Rate whitelist.
+com.mobile.legends	Mobile Legends: Bang Bang	120	WHITELIST	120	high_performance	rog_phone_9_pro	redmi_k80_ultra	0	medium	esports	Ultra Refresh Rate (120 FPS) requires whitelisted flagship model.
+com.riotgames.league.wildrift	League of Legends: Wild Rift	120	WHITELIST	120	high_performance	rog_phone_9_pro	xiaomi_13t_pro	0	medium	esports	90/120 FPS option unlocked via device whitelist; medium GPU load.
+com.riotgames.league.wildriftvn	League of Legends: Wild Rift (VN)	120	WHITELIST	120	high_performance	rog_phone_9_pro	xiaomi_13t_pro	0	medium	esports	VNG Wild Rift 90/120 FPS device whitelist.
+com.levelinfinite.sgameGlobal	Honor of Kings	120	WHITELIST	120	high_performance	xiaomi_17_ultra	redmi_k80_ultra	0	medium	esports	120 FPS Ultra FPS requires whitelisted model; prefers Xiaomi/ROG/iQOO.
+com.garena.game.kgvn	Lien Quan Mobile (Arena of Valor VN)	60	GAME_CAP	60	balanced	rog_phone_9_pro	redmi_k80_ultra	0	medium	esports	Game engine caps FPS at 60 on Android; spoof helps unlock High/HD graphics preset, not >60 FPS.
+com.miHoYo.GenshinImpact	Genshin Impact	60	GAME_CAP	60	extreme_gaming	rog_phone_9_pro	redmi_k80_ultra	0	extreme	standard	Engine caps Android at 60 FPS (120Hz restricted to iOS); focus is sustained 60 FPS frame-time stability.
+com.HoYoverse.hkrpgoversea	Honkai: Star Rail	60	GAME_CAP	60	high_performance	rog_phone_9_pro	redmi_k80_ultra	0	high	standard	Engine hard-capped at 60 FPS on Android.
+com.HoYoverse.Nap	Zenless Zone Zero	60	GAME_CAP	60	extreme_gaming	rog_phone_9_pro	redmi_k80_ultra	0	extreme	precision	Engine hard-capped at 60 FPS on Android; extreme GPU & thermal load.
+com.kurogame.wutheringwaves.global	Wuthering Waves	60	GAME_CAP	60	extreme_gaming	rog_phone_9_pro	redmi_k80_ultra	0	extreme	precision	Engine caps Android at 60 FPS unless developer enables device-specific 120 FPS tier.
+com.dts.freefireth	Garena Free Fire	120	WHITELIST	120	extreme_gaming	realme_14_5g	redmi_k80_ultra	0	medium	esports	90/120 FPS unlocked via official partner profile realme 14 5G (RMX5070) + 120Hz display; requires Clear Data (pm clear) on first spoof so game reloads device tier.
+com.dts.freefiremax	Garena Free Fire MAX	120	WHITELIST	120	extreme_gaming	realme_14_5g	redmi_k80_ultra	0	medium	esports	90/120 FPS unlocked via official partner profile realme 14 5G (RMX5070) + 120Hz display; requires Clear Data (pm clear) on first spoof so game reloads device tier.
+com.proximabeta.mf.uamo	Arena Breakout	120	WHITELIST	120	high_performance	redmagic_11_pro	redmi_k80_ultra	0	high	esports	90/120 FPS Lite/Pro modes gated by device tier whitelist.
+com.axlebolt.standoff2	Standoff 2	144	OPEN	144	high_performance	rog_phone_9_pro	redmi_k80_ultra	0	medium	esports	Supports 120-144 FPS natively when display mode matches.
+com.supercell.brawlstars	Brawl Stars	120	OPEN	120	balanced	rog_phone_9_pro	poco_x6_pro	0	low	esports	Automatically matches display refresh rate up to 120Hz.
+com.gameloft.android.ANMP.GloftA9HM	Asphalt Legends Unite	120	WHITELIST	120	high_performance	rog_phone_9_pro	redmi_k80_ultra	0	high	precision	120 FPS option gated on flagship GPUs.
+com.blizzard.diablo.immortal	Diablo Immortal	60	WHITELIST	60	high_performance	galaxy_s26_ultra	redmi_k80_ultra	0	high	standard	60 FPS & Ultra Resolution require whitelisted flagship model.
+com.epicgames.fortnite	Fortnite Mobile	90	WHITELIST	90	extreme_gaming	galaxy_s26_ultra	redmi_k80_ultra	0	extreme	esports	90 FPS mode requires Galaxy S/ROG/OnePlus flagship whitelist & strong GPU.
+com.mojang.minecraftpe	Minecraft	120	OPEN	120	balanced	oneplus_15	poco_x6_pro	0	medium	standard	FPS slider unlocked up to display refresh rate.
+com.roblox.client	Roblox	120	OPEN	120	balanced	oneplus_15	poco_x6_pro	0	medium	standard	Supports 60-120 FPS depending on game experience and display Hz.
+com.netease.newspike	Blood Strike	120	OPEN	120	high_performance	redmagic_11_pro	redmi_k80_ultra	0	medium	esports	Supports up to 120 FPS natively on 120Hz displays.
+com.garena.game.df	Delta Force Mobile	144	WHITELIST	120	extreme_gaming	iqoo_15	redmi_k80_ultra	0	extreme	esports	120/144 FPS modes gated by flagship device tier.
+com.garena.game.dfvn	Delta Force Mobile (VN)	144	WHITELIST	120	extreme_gaming	iqoo_15	redmi_k80_ultra	0	extreme	esports	Garena VN client 120/144 FPS gated by flagship device tier and sustained SoC/GPU thermal ceiling.
+com.carxtech.sr	CarX Street	60	GAME_CAP	60	extreme_gaming	rog_phone_9_pro	redmi_k80_ultra	0	extreme	precision	Very heavy open-world shader load; engine caps at 60 FPS.
+com.criticalforceentertainment.criticalops	Critical Ops	120	OPEN	120	high_performance	rog_phone_9_pro	redmi_k80_ultra	0	medium	esports	Supports 60/90/120 FPS directly in settings when screen runs at matching Hz.

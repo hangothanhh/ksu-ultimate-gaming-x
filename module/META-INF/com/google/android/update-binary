@@ -1,0 +1,28 @@
+#!/sbin/sh
+# Standard KernelSU / Magisk recovery-compatible installer stub
+umask 022
+
+OUTFD="$2"
+ZIPFILE="$3"
+
+if [ -f /data/adb/ksu/bin/busybox ]; then
+    export ASH_STANDALONE=1
+fi
+
+if [ -f /data/adb/magisk/util_functions.sh ]; then
+    . /data/adb/magisk/util_functions.sh
+    install_module
+    exit 0
+fi
+
+# Fallback extraction for environments without util_functions.sh
+MODID="ksu_ultimate_gaming_x"
+MODPATH="/data/adb/modules_update/$MODID"
+mkdir -p "$MODPATH"
+if command -v unzip >/dev/null 2>&1; then
+    unzip -o "$ZIPFILE" -x 'META-INF/*' -d "$MODPATH" >&2
+fi
+if [ -f "$MODPATH/customize.sh" ]; then
+    . "$MODPATH/customize.sh"
+fi
+exit 0

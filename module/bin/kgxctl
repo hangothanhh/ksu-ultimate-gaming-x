@@ -1,0 +1,1150 @@
+#!/system/bin/sh
+# KSU Ultimate Gaming X - JSON Control CLI (v1.0.0) for Rust App & Root Terminal
+
+SCRIPT_DIR="${0%/*}"
+MODDIR="${SCRIPT_DIR%/*}"
+[ -d "$MODDIR/lib" ] || MODDIR="${KGX_MODDIR:-/data/adb/modules/ksu_ultimate_gaming_x}"
+
+export KGX_MODDIR="${KGX_MODDIR:-$MODDIR}"
+export KGX_DATA_DIR="${KGX_DATA_DIR:-/data/adb/ksu_gaming_x}"
+
+# Fast-path: delegate hot read endpoints to compiled ARM64 Rust core (<3ms vs ~300ms POSIX forks)
+if [ -z "${KGX_DISABLE_RUST_CORE:-}" ] && [ -x "$KGX_MODDIR/bin/kgx-core" ] && [ "$(uname -m 2>/dev/null)" = "aarch64" ]; then
+    case "${1:-status}:${2:-}" in
+        status:|engine:get|profiles:list|logs:|logs:[0-9]*|spoof:diag|fps:*|overlay-tick:*)
+            exec "$KGX_MODDIR/bin/kgx-core" "$@"
+            ;;
+    esac
+fi
+
+. "$KGX_MODDIR/lib/common.sh"
+. "$KGX_MODDIR/lib/hw_detect.sh"
+. "$KGX_MODDIR/lib/matcher.sh"
+. "$KGX_MODDIR/lib/spoof.sh"
+. "$KGX_MODDIR/lib/fps.sh"
+. "$KGX_MODDIR/lib/cpu_gpu.sh"
+. "$KGX_MODDIR/lib/ram.sh"
+. "$KGX_MODDIR/lib/touch.sh"
+. "$KGX_MODDIR/lib/display.sh"
+. "$KGX_MODDIR/lib/thermal.sh"
+. "$KGX_MODDIR/lib/power.sh"
+. "$KGX_MODDIR/lib/gos.sh"
+. "$KGX_MODDIR/lib/freezer.sh"
+. "$KGX_MODDIR/lib/network.sh"
+. "$KGX_MODDIR/lib/backup.sh"
+. "$KGX_MODDIR/lib/session.sh"
+
+kgx_init_dirs
+kgx_load_config
+
+daemon_is_running() {
+    local pfile="$KGX_DATA_DIR/state/daemon.pid" pid
+    [ -f "$pfile" ] || return 1
+    pid="$(cat "$pfile" 2>/dev/null | tr -dc '0-9')"
+    [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null
+}
+
+cmd_daemon() {
+    local sub="${1:-status}" pfile="$KGX_DATA_DIR/state/daemon.pid" pid running="false"
+    case "$sub" in
+        status)
+            if daemon_is_running; then
+                pid="$(cat "$pfile" 2>/dev/null | tr -dc '0-9')"
+                running="true"
+            else
+                pid=0
+            fi
+            printf '{"running":%s,"pid":%s}\n' "$running" "${pid:-0}"
+            ;;
+        start)
+            if [ "${SAFE_MODE:-0}" = "1" ]; then
+                printf '{"ok":false,"error":"Cannot start daemon while SAFE_MODE=1"}\n'
+                return 1
+            fi
+            if ! daemon_is_running; then
+                sh "$KGX_MODDIR/bin/gaming_daemon.sh" >/dev/null 2>&1 &
+                sleep 1
+            fi
+            cmd_daemon status
+            ;;
+        stop)
+            if [ -f "$pfile" ]; then
+                pid="$(cat "$pfile" 2>/dev/null | tr -dc '0-9')"
+                if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+                    kill "$pid" 2>/dev/null || true
+                    sleep 1
+                    kill -9 "$pid" 2>/dev/null || true
+                fi
+                rm -f "$pfile"
+            fi
+            session_deactivate "manual_stop" >/dev/null 2>&1 || true
+            printf '{"ok":true,"running":false,"pid":0}\n'
+            ;;
+        restart)
+            cmd_daemon stop >/dev/null 2>&1 || true
+            cmd_daemon start
+            ;;
+        *)
+            printf '{"ok":false,"error":"Unknown daemon subcommand"}\n'
+            return 1
+            ;;
+    esac
+}
+
+cmd_status() {
+    local d_running="false" d_pid=0
+    local active="false" act_pkg="" act_name="" act_mode="${DEFAULT_MODE:-high_performance}" act_fps=0
+    local sp_active="false" sp_id="" sp_label="" sp_model="" sp_brand="" sp_device=""
+    local temps batt_c cpu_c gpu_c prev_st="NORMAL" therm_eval therm_stage therm_fps
+    local cpu_gpu_json ram_m ram_tot ram_avail ram_used ram_pct psi_some psi_full ram_lvl
+    local cur_hz live_fps net_tr fps_json
+
+    hw_load
+    if daemon_is_running; then
+        d_running="true"
+        d_pid="$(cat "$KGX_DATA_DIR/state/daemon.pid" 2>/dev/null | tr -dc '0-9')"
+    fi
+
+    if [ -f "$KGX_DATA_DIR/state/active_session.env" ]; then
+        . "$KGX_DATA_DIR/state/active_session.env"
+        active="true"
+        act_pkg="${ACTIVE_PKG:-}"
+        act_name="${ACTIVE_NAME:-}"
+        act_mode="${ACTIVE_MODE:-$DEFAULT_MODE}"
+        act_fps="${ACTIVE_FPS:-0}"
+    fi
+
+    if [ -f "$KGX_DATA_DIR/state/active_spoof.env" ]; then
+        . "$KGX_DATA_DIR/state/active_spoof.env"
+        if [ "${SPOOF_ACTIVE:-0}" = "1" ]; then
+            sp_active="true"
+            sp_id="${SPOOF_PROFILE_ID:-}"
+            sp_label="${SPOOF_LABEL:-}"
+            sp_model="${SPOOF_MODEL:-}"
+            sp_brand="${SPOOF_BRAND:-}"
+            sp_device="${SPOOF_DEVICE:-}"
+        fi
+    fi
+
+    local _s
+    temps="$(thermal_read_temps)"
+    IFS='|' read -r batt_c cpu_c gpu_c <<EOF
+$temps
+EOF
+    [ -f "$KGX_DATA_DIR/state/thermal_stage.state" ] && prev_st="$(cat "$KGX_DATA_DIR/state/thermal_stage.state" 2>/dev/null | head -n 1)"
+    therm_eval="$(thermal_evaluate_stage "$batt_c" "$cpu_c" "${prev_st:-NORMAL}" "$gpu_c")"
+    IFS='|' read -r therm_stage therm_fps _s <<EOF
+$therm_eval
+EOF
+
+    cpu_gpu_json="$(cpu_gpu_read_telemetry)"
+    ram_m="$(ram_get_metrics)"
+    IFS='|' read -r ram_tot ram_avail ram_used ram_pct _s _s psi_some psi_full ram_lvl <<EOF
+$ram_m
+EOF
+
+    local cur_hz="${DISPLAY_MAX_HZ:-60}"
+    if [ -f "$KGX_DATA_DIR/state/active_display.env" ]; then
+        . "$KGX_DATA_DIR/state/active_display.env"
+        [ -n "${ACTIVE_DISPLAY_HZ:-}" ] && cur_hz="$ACTIVE_DISPLAY_HZ"
+    fi
+    live_fps="$(fps_read_live "$act_pkg" 1)"
+    net_tr="$(network_detect_transport)"
+
+    local sys_prop_act="false" cur_mkt pi_shield_act="false" rust_core_act="false" has_zyg="0" sp_ex_set="false" sp_deny_cnt=0
+    [ -f "$KGX_MODDIR/system.prop" ] && sys_prop_act="true"
+    [ -x "$KGX_MODDIR/bin/kgx-core" ] && rust_core_act="true"
+    kgx_is_zygisk_active && has_zyg="1"
+    if [ "${PLAY_INTEGRITY_SHIELD:-1}" = "1" ] && [ "$has_zyg" = "1" ]; then
+        pi_shield_act="true"
+    fi
+    [ "${SPOOF_EXCLUDE_SETTINGS:-1}" = "1" ] && sp_ex_set="true"
+    sp_deny_cnt="$(spoof_denylist_count 2>/dev/null || printf 0)"
+    cur_mkt="$(getprop ro.product.marketname 2>/dev/null | tr -d '\r')"
+
+    if [ -n "$act_pkg" ]; then
+        fps_json="$(fps_analyze_json "$act_pkg" "$act_fps" "$therm_stage" "$([ "$sp_active" = "true" ] && printf 1 || printf 0)")"
+    else
+        fps_json='null'
+    fi
+
+    local byp_sup="false" byp_act="false" batt_pct=0 pwr_m pwr_mw=0 pwr_ma=0 pwr_chg=0 pwr_chg_b="false"
+    [ -n "$BYPASS_NODE" ] && [ -e "$BYPASS_NODE" ] && byp_sup="true"
+    [ -f "$KGX_DATA_DIR/state/bypass_active.state" ] && byp_act="true"
+    batt_pct="$(power_get_batt_pct)"
+    pwr_m="$(power_read_mw 2>/dev/null || printf '0|0|0\n')"
+    IFS='|' read -r pwr_mw pwr_ma pwr_chg <<EOF
+$pwr_m
+EOF
+    [ "${pwr_chg:-0}" = "1" ] && pwr_chg_b="true"
+
+    local soft_tier=0 alert_en="false" alert_hit="false" alert_msg=""
+    [ -f "$KGX_DATA_DIR/state/soft_step.tier" ] && soft_tier="$(cat "$KGX_DATA_DIR/state/soft_step.tier" 2>/dev/null | head -n 1 | tr -dc '0-9')"
+    [ -n "$soft_tier" ] || soft_tier=0
+    [ "${THERMAL_ALERT_ENABLED:-1}" = "1" ] && alert_en="true"
+    if [ "$alert_en" = "true" ]; then
+        if [ "${batt_c:-0}" -ge "${THERMAL_ALERT_BATT_C:-44}" ] 2>/dev/null; then
+            alert_hit="true"
+            alert_msg="Pin ${batt_c}°C"
+        fi
+        if [ "${cpu_c:-0}" -ge "${THERMAL_ALERT_CPU_C:-92}" ] 2>/dev/null; then
+            alert_hit="true"
+            alert_msg="${alert_msg:+${alert_msg} · }CPU ${cpu_c}°C"
+        fi
+    fi
+
+    local ext_name="" ext_conn="false" ext_off="false"
+    ext_name="$(display_ext_detect 2>/dev/null || true)"
+    [ -n "$ext_name" ] && ext_conn="true"
+    [ -f "$KGX_DATA_DIR/state/ext_internal_off.state" ] && ext_off="true"
+
+    local res_en="false" res_act="false" ACTIVE_RES="" ACTIVE_DENSITY="" ACTIVE_RES_SOURCE=""
+    [ "${RES_OVERRIDE_ENABLED:-0}" = "1" ] && res_en="true"
+    if [ -f "$KGX_DATA_DIR/state/active_res.env" ]; then
+        . "$KGX_DATA_DIR/state/active_res.env"
+        [ -n "$ACTIVE_RES" ] && res_act="true"
+    fi
+
+    local frz_en="false" frz_sup="false" frz_fcnt=0 frz_tcnt=0
+    [ "${FREEZER_ENABLED:-0}" = "1" ] && frz_en="true"
+    freezer_is_supported && frz_sup="true"
+    [ -f "$KGX_DATA_DIR/state/frozen_uids.tsv" ] && frz_fcnt="$(awk 'NF>=2{c++} END{print c+0}' "$KGX_DATA_DIR/state/frozen_uids.tsv" 2>/dev/null)"
+    [ -f "$KGX_DATA_DIR/config/freezer_apps.list" ] && frz_tcnt="$(awk '!/^#/ && NF>0{c++} END{print c+0}' "$KGX_DATA_DIR/config/freezer_apps.list" 2>/dev/null)"
+
+    printf '{'
+    printf '"module_version":"v1.0.0",'
+    printf '"safe_mode":%s,' "$([ "${SAFE_MODE:-0}" = "1" ] && printf true || printf false)"
+    printf '"auto_optimize":%s,' "$([ "${AUTO_OPTIMIZE:-1}" = "1" ] && printf true || printf false)"
+    printf '"thermal_unlock":%s,' "$([ "${THERMAL_UNLOCK:-0}" = "1" ] && printf true || printf false)"
+    printf '"sustained_sweet_spot":%s,' "$([ "${SUSTAINED_SWEET_SPOT:-0}" = "1" ] && printf true || printf false)"
+    printf '"max_clock_lock":%s,' "$([ "${MAX_CLOCK_LOCK:-0}" = "1" ] && printf true || printf false)"
+    printf '"soft_thermal_step":%s,' "$([ "${SOFT_THERMAL_STEP:-0}" = "1" ] && printf true || printf false)"
+    printf '"gos_neutralize":%s,' "$([ "${GOS_NEUTRALIZE:-0}" = "1" ] && printf true || printf false)"
+    printf '"daemon":{"running":%s,"pid":%s},' "$d_running" "${d_pid:-0}"
+    printf '"ext_display":{"screen_off_enabled":%s,"connected":%s,"internal_screen_off":%s,"external_name":"%s"},' \
+        "$([ "${EXT_DISPLAY_SCREEN_OFF:-0}" = "1" ] && printf true || printf false)" \
+        "$ext_conn" "$ext_off" "$(json_escape "$ext_name")"
+    printf '"res_override":{"enabled":%s,"scope":"%s","preset":"%s","density":"%s","active":%s,"current_res":"%s","current_density":"%s","source":"%s"},' \
+        "$res_en" "$(json_escape "${RES_OVERRIDE_SCOPE:-ext_scrcpy}")" "$(json_escape "${RES_OVERRIDE_PRESET:-1080x1920}")" \
+        "$(json_escape "${RES_OVERRIDE_DENSITY:-auto}")" "$res_act" \
+        "$(json_escape "$ACTIVE_RES")" "$(json_escape "$ACTIVE_DENSITY")" "$(json_escape "$ACTIVE_RES_SOURCE")"
+    printf '"freezer":{"enabled":%s,"supported":%s,"frozen_count":%s,"target_count":%s},' \
+        "$frz_en" "$frz_sup" "${frz_fcnt:-0}" "${frz_tcnt:-0}"
+    printf '"power":{"bypass_supported":%s,"bypass_enabled":%s,"bypass_active":%s,"bypass_node":"%s","bypass_min_pct":%s,"battery_pct":%s,"power_mw":%s,"current_ma":%s,"charging":%s},' \
+        "$byp_sup" "$([ "${BYPASS_CHARGING:-0}" = "1" ] && printf true || printf false)" "$byp_act" \
+        "$(json_escape "$BYPASS_NODE")" "${BYPASS_MIN_PCT:-80}" "${batt_pct:-0}" "${pwr_mw:-0}" "${pwr_ma:-0}" "$pwr_chg_b"
+    printf '"real_device":{"brand":"%s","manufacturer":"%s","model":"%s","device":"%s","product":"%s","soc":"%s","gpu":"%s","gpu_vendor":"%s","tier":%s,"api":%s,"exynos":%s},' \
+        "$(json_escape "$REAL_BRAND")" "$(json_escape "$REAL_MANUFACTURER")" "$(json_escape "$REAL_MODEL")" \
+        "$(json_escape "$REAL_DEVICE")" "$(json_escape "$REAL_PRODUCT")" "$(json_escape "$SOC_PLATFORM")" \
+        "$(json_escape "$GPU_MODEL")" "$(json_escape "$GPU_VENDOR")" "${HW_TIER:-2}" "${REAL_ANDROID_API:-0}" \
+        "$([ "${SOC_VENDOR:-}" = "exynos" ] && printf true || printf false)"
+    printf '"spoof":{"active":%s,"enabled":%s,"play_integrity_shield":%s,"play_integrity_shield_active":%s,"exclude_settings":%s,"denylist_count":%s,"global_profile":"%s","system_prop_active":%s,"profile_id":"%s","label":"%s","brand":"%s","model":"%s","device":"%s","current_prop_model":"%s","current_prop_marketname":"%s"},' \
+        "$sp_active" "$([ "${SPOOF_ENABLED:-1}" = "1" ] && printf true || printf false)" \
+        "$([ "${PLAY_INTEGRITY_SHIELD:-1}" = "1" ] && printf true || printf false)" \
+        "$pi_shield_act" "$sp_ex_set" "${sp_deny_cnt:-0}" \
+        "$(json_escape "${GLOBAL_SPOOF_PROFILE:-realme_14_5g}")" \
+        "$sys_prop_act" \
+        "$(json_escape "$sp_id")" "$(json_escape "$sp_label")" "$(json_escape "$sp_brand")" \
+        "$(json_escape "$sp_model")" "$(json_escape "$sp_device")" \
+        "$(json_escape "$(getprop ro.product.model 2>/dev/null | tr -d '\r')")" \
+        "$(json_escape "$cur_mkt")"
+    printf '"session":{"active":%s,"package":"%s","name":"%s","mode":"%s","target_fps":%s},' \
+        "$active" "$(json_escape "$act_pkg")" "$(json_escape "$act_name")" "$(json_escape "$act_mode")" "${act_fps:-0}"
+    printf '"cpu_gpu":%s,' "$cpu_gpu_json"
+    printf '"ram":{"total_mb":%s,"avail_mb":%s,"used_mb":%s,"used_pct":%s,"psi_some":"%s","psi_full":"%s","pressure":"%s"},' \
+        "$ram_tot" "$ram_avail" "$ram_used" "$ram_pct" "$psi_some" "$psi_full" "$ram_lvl"
+    printf '"thermal":{"battery_c":%s,"cpu_c":%s,"gpu_c":%s,"stage":"%s","thermal_fps_cap":%s,"soft_step_tier":%s,"alert_enabled":%s,"alert":%s,"alert_msg":"%s"},' \
+        "$batt_c" "$cpu_c" "$gpu_c" "$therm_stage" "$therm_fps" "$soft_tier" "$alert_en" "$alert_hit" "$(json_escape "$alert_msg")"
+    printf '"display":{"current_hz":%s,"max_hz":%s,"supported_hz":"%s"},' \
+        "${cur_hz:-60}" "${DISPLAY_MAX_HZ:-60}" "$(json_escape "$DISPLAY_SUPPORTED_HZ")"
+    printf '"fps":{"live":%s,"low1":null,"source":"%s","analysis":%s},' \
+        "$live_fps" "$([ "$live_fps" != "null" ] && printf drm || printf none)" "$fps_json"
+    printf '"network":{"transport":"%s"},' "$net_tr"
+    printf '"capabilities":{"has_resetprop":%s,"has_zygisk":%s,"has_cmd_game":%s,"has_uclamp":%s,"rust_core":%s,"touch_node":"%s"}' \
+        "$([ "${HAS_RESETPROP:-0}" = "1" ] && printf true || printf false)" \
+        "$([ "$has_zyg" = "1" ] && printf true || printf false)" \
+        "$([ "${HAS_CMD_GAME:-0}" = "1" ] && printf true || printf false)" \
+        "$([ "${HAS_UCLAMP:-0}" = "1" ] && printf true || printf false)" \
+        "$rust_core_act" \
+        "$(json_escape "$TOUCH_GAME_NODE")"
+    printf '}\n'
+}
+
+cmd_games_list() {
+    {
+        printf '===INST===\n'
+        pm list packages 2>/dev/null || true
+        printf '===CUST===\n'
+        [ -f "$KGX_DATA_DIR/config/custom_games.tsv" ] && cat "$KGX_DATA_DIR/config/custom_games.tsv"
+        printf '===DB===\n'
+        [ -f "$KGX_MODDIR/data/games.tsv" ] && cat "$KGX_MODDIR/data/games.tsv"
+    } | awk -v def_mode="${DEFAULT_MODE:-high_performance}" '
+    function jesc(s) {
+        gsub(/\\/, "\\\\", s)
+        gsub(/"/, "\\\"", s)
+        gsub(/\t/, "\\t", s)
+        gsub(/\r/, "", s)
+        return s
+    }
+    function emit_row(p, name, en, prof, tfps, mode, dhz, tprof, net, dscale, wres, emax, ltype, gload, is_k) {
+        if (!first) printf ","
+        first = 0
+        if (dscale == "") dscale = "1.0"
+        if (wres == "") wres = "default"
+        printf "{\"package\":\"%s\",\"name\":\"%s\",\"enabled\":%s,\"spoof_profile\":\"%s\",\"target_fps\":%s,\"mode\":\"%s\",\"display_hz\":\"%s\",\"touch_profile\":\"%s\",\"net_opt\":%s,\"downscale\":\"%s\",\"wm_res\":\"%s\",\"engine_max_fps\":%s,\"limit_type\":\"%s\",\"gpu_load\":\"%s\",\"installed\":%s,\"known_db\":%s}", \
+            jesc(p), jesc(name), (en == "1" ? "true" : "false"), jesc(prof), \
+            (tfps + 0), jesc(mode), jesc(dhz), jesc(tprof), (net == "1" ? "true" : "false"), \
+            jesc(dscale), jesc(wres), (emax + 0), jesc(ltype), jesc(gload), (inst[p] ? "true" : "false"), (is_k ? "true" : "false")
+    }
+    BEGIN { sec = ""; first = 1; nc = 0; printf "{\"games\":[" }
+    {
+        gsub(/\r/, "")
+        if ($0 == "===INST===") { sec = "INST"; next }
+        if ($0 == "===CUST===") { sec = "CUST"; next }
+        if ($0 == "===DB===")   { sec = "DB";   next }
+        if ($0 == "" || substr($0, 1, 1) == "#") next
+
+        if (sec == "INST") {
+            if (index($0, "package:") == 1) {
+                p = substr($0, 9)
+                sub(/[ \t].*/, "", p)
+                if (p != "") inst[p] = 1
+            }
+        } else if (sec == "CUST") {
+            n = split($0, f, "\t")
+            if (n >= 7 && f[1] != "") {
+                p = f[1]
+                if (!has_cust[p]) cust_order[++nc] = p
+                has_cust[p] = 1
+                c_en[p] = f[2]; c_prof[p] = f[3]; c_tfps[p] = f[4]
+                c_mode[p] = f[5]; c_dhz[p] = f[6]; c_tprof[p] = f[7]; c_net[p] = f[8]
+                c_dsc[p] = (n >= 9 && f[9] != "" ? f[9] : "1.0")
+                c_wres[p] = (n >= 10 && f[10] != "" ? f[10] : "default")
+            }
+        } else if (sec == "DB") {
+            n = split($0, f, "\t")
+            if (n >= 11 && f[1] != "") {
+                p = f[1]
+                seen_db[p] = 1
+                en = (has_cust[p] && c_en[p] != "" ? c_en[p] : "1")
+                prof = (has_cust[p] && c_prof[p] != "" ? c_prof[p] : "auto")
+                tfps = (has_cust[p] && c_tfps[p] != "" ? c_tfps[p] : f[5])
+                mode = (has_cust[p] && c_mode[p] != "" ? c_mode[p] : f[6])
+                dhz = (has_cust[p] && c_dhz[p] != "" ? c_dhz[p] : "auto")
+                tprof = (has_cust[p] && c_tprof[p] != "" ? c_tprof[p] : f[11])
+                net = (has_cust[p] && c_net[p] != "" ? c_net[p] : "1")
+                dsc = (has_cust[p] && c_dsc[p] != "" ? c_dsc[p] : "1.0")
+                wres = (has_cust[p] && c_wres[p] != "" ? c_wres[p] : "default")
+                emit_row(p, f[2], en, prof, tfps, mode, dhz, tprof, net, dsc, wres, f[3], f[4], f[10], 1)
+            }
+        }
+    }
+    END {
+        for (i = 1; i <= nc; i++) {
+            p = cust_order[i]
+            if (!seen_db[p]) {
+                emit_row(p, p, (c_en[p] != "" ? c_en[p] : "1"), \
+                    (c_prof[p] != "" ? c_prof[p] : "auto"), \
+                    (c_tfps[p] != "" ? c_tfps[p] : "60"), \
+                    (c_mode[p] != "" ? c_mode[p] : def_mode), \
+                    (c_dhz[p] != "" ? c_dhz[p] : "auto"), \
+                    (c_tprof[p] != "" ? c_tprof[p] : "standard"), \
+                    (c_net[p] != "" ? c_net[p] : "1"), \
+                    (c_dsc[p] != "" ? c_dsc[p] : "1.0"), \
+                    (c_wres[p] != "" ? c_wres[p] : "default"), 144, "OPEN", "medium", 0)
+            }
+        }
+        printf "]}\n"
+    }'
+}
+
+cmd_games_scan() {
+    local third_pkgs="" p known_items="" other_items="" first_k=1 first_o=1 brow gname
+    third_pkgs="$(pm list packages -3 2>/dev/null | sed 's/^package://' | tr -d '\r' | sort)"
+
+    for p in $third_pkgs; do
+        [ -n "$p" ] || continue
+        brow="$(matcher_get_builtin_game_row "$p")"
+        if [ -n "$brow" ]; then
+            gname="$(printf '%s\n' "$brow" | cut -f2)"
+            [ "$first_k" -eq 0 ] && known_items="${known_items},"
+            first_k=0
+            known_items="${known_items}{\"package\":\"$(json_escape "$p")\",\"name\":\"$(json_escape "$gname")\"}"
+        else
+            [ "$first_o" -eq 0 ] && other_items="${other_items},"
+            first_o=0
+            other_items="${other_items}\"$(json_escape "$p")\""
+        fi
+    done
+
+    printf '{"matched_known":[%s],"third_party_packages":[%s]}\n' "$known_items" "$other_items"
+}
+
+cmd_games_upsert() {
+    local pkg="$1" en="$2" prof="$3" tfps="$4" mode="$5" dhz="$6" tprof="$7" net="$8" dscale="${9:-1.0}" wres="${10:-default}"
+    local cfg="$KGX_DATA_DIR/config/custom_games.tsv"
+    local tmp="$cfg.tmp.$$"
+
+    kgx_sanitize_pkg "$pkg" || { printf '{"ok":false,"error":"Invalid package name"}\n'; return 1; }
+    [ "$en" = "0" ] || [ "$en" = "1" ] || en=1
+    kgx_sanitize_id "$prof" || prof="auto"
+    kgx_sanitize_int "$tfps" || tfps=60
+    kgx_is_valid_mode "$mode" || mode="high_performance"
+    if [ "$dhz" != "auto" ]; then kgx_sanitize_int "$dhz" || dhz="auto"; fi
+    case "$tprof" in standard|esports|precision) ;; *) tprof="standard" ;; esac
+    [ "$net" = "0" ] || [ "$net" = "1" ] || net=1
+    case "$dscale" in 1.0|0.9|0.85|0.8|0.75) ;; *) dscale="1.0" ;; esac
+    case "$wres" in 1080x1920|900x1600|720x1280|1440x2560) ;; *) wres="default" ;; esac
+
+    [ -f "$cfg" ] || printf '# package\tenabled\tspoof_profile\ttarget_fps\tmode\tdisplay_hz\ttouch_profile\tnet_opt\tdownscale\twm_res\n' > "$cfg"
+    awk -F '\t' -v p="$pkg" '$1!=p' "$cfg" > "$tmp"
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$pkg" "$en" "$prof" "$tfps" "$mode" "$dhz" "$tprof" "$net" "$dscale" "$wres" >> "$tmp"
+    mv "$tmp" "$cfg"
+
+    kgx_load_config
+    command -v fps_preapply_downscale >/dev/null 2>&1 && fps_preapply_downscale "$pkg" "$en" "$dscale" "$tfps" "$mode" >/dev/null 2>&1 || true
+
+    kgx_log "INFO" "games" "Updated profile for $pkg (en=$en, fps=$tfps, mode=$mode, hz=$dhz, downscale=$dscale, wm_res=$wres)"
+    printf '{"ok":true,"package":"%s","downscale":"%s","wm_res":"%s"}\n' "$(json_escape "$pkg")" "$(json_escape "$dscale")" "$(json_escape "$wres")"
+}
+
+cmd_profiles_list() {
+    local pkg="${1:-}"
+    local first=1 src pid label cat soc gpu tier max_hz ram brand mfg model dev prod fp notes is_cust
+    local grow="" pref_adreno="" pref_mali="" _s
+
+    hw_load
+    if [ -n "$pkg" ]; then
+        grow="$(matcher_get_builtin_game_row "$pkg")"
+        if [ -n "$grow" ]; then
+            IFS='	' read -r _s _s _s _s _s _s pref_adreno pref_mali _s <<EOF
+$grow
+EOF
+        fi
+    fi
+
+    printf '{"gpu_vendor":"%s","hw_tier":%s,"profiles":[' "$(json_escape "$GPU_VENDOR")" "${HW_TIER:-2}"
+
+    for src in "$KGX_DATA_DIR/profiles/custom_profiles.tsv" "$KGX_MODDIR/data/devices.tsv"; do
+        [ -f "$src" ] || continue
+        case "$src" in
+            *custom_profiles.tsv) is_cust="true" ;;
+            *) is_cust="false" ;;
+        esac
+        while IFS='	' read -r pid label cat soc gpu tier max_hz ram brand mfg model dev prod fp notes || [ -n "$pid" ]; do
+            case "$pid" in ''|\#*) continue ;; esac
+            [ "$fp" = "-" ] && fp=""
+            matcher_score_fields "$pid" "$gpu" "$tier" "$max_hz" "$pref_adreno" "$pref_mali"
+
+            [ "$first" -eq 0 ] && printf ','
+            first=0
+            printf '{"id":"%s","label":"%s","category":"%s","soc_family":"%s","gpu_family":"%s","tier":%s,"max_hz":%s,"ram_gb":%s,"brand":"%s","manufacturer":"%s","model":"%s","device":"%s","product":"%s","fingerprint":"%s","notes":"%s","custom":%s,"compat_score":%s,"compat_level":"%s","compat_reason":"%s"}' \
+                "$(json_escape "$pid")" "$(json_escape "$label")" "$(json_escape "$cat")" \
+                "$(json_escape "$soc")" "$(json_escape "$gpu")" "${tier:-2}" "${max_hz:-120}" "${ram:-12}" \
+                "$(json_escape "$brand")" "$(json_escape "$mfg")" "$(json_escape "$model")" \
+                "$(json_escape "$dev")" "$(json_escape "$prod")" "$(json_escape "$fp")" \
+                "$(json_escape "$notes")" "$is_cust" "$MATCH_SCORE" "$(json_escape "$MATCH_COMPAT")" "$(json_escape "$MATCH_REASON")"
+        done < "$src"
+    done
+    printf ']}\n'
+}
+
+cmd_engine_get() {
+    kgx_load_config
+    printf '{'
+    printf '"AUTO_OPTIMIZE":%s,' "$AUTO_OPTIMIZE"
+    printf '"SAFE_MODE":%s,' "$SAFE_MODE"
+    printf '"SPOOF_ENABLED":%s,' "$SPOOF_ENABLED"
+    printf '"PLAY_INTEGRITY_SHIELD":%s,' "$PLAY_INTEGRITY_SHIELD"
+    printf '"SPOOF_EXCLUDE_SETTINGS":%s,' "$SPOOF_EXCLUDE_SETTINGS"
+    printf '"GLOBAL_SPOOF_PROFILE":"%s",' "$(json_escape "${GLOBAL_SPOOF_PROFILE:-realme_14_5g}")"
+    printf '"DEFAULT_MODE":"%s",' "$(json_escape "$DEFAULT_MODE")"
+    printf '"FPS_ENGINE_ENABLED":%s,' "$FPS_ENGINE_ENABLED"
+    printf '"DISPLAY_AUTO_HZ":%s,' "$DISPLAY_AUTO_HZ"
+    printf '"TOUCH_OPT_ENABLED":%s,' "$TOUCH_OPT_ENABLED"
+    printf '"RAM_OPT_ENABLED":%s,' "$RAM_OPT_ENABLED"
+    printf '"THERMAL_GUARD_ENABLED":%s,' "$THERMAL_GUARD_ENABLED"
+    printf '"THERMAL_UNLOCK":%s,' "$THERMAL_UNLOCK"
+    printf '"SUSTAINED_SWEET_SPOT":%s,' "$SUSTAINED_SWEET_SPOT"
+    printf '"MAX_CLOCK_LOCK":%s,' "$MAX_CLOCK_LOCK"
+    printf '"SOFT_THERMAL_STEP":%s,' "$SOFT_THERMAL_STEP"
+    printf '"GOS_NEUTRALIZE":%s,' "$GOS_NEUTRALIZE"
+    printf '"EXT_DISPLAY_SCREEN_OFF":%s,' "$EXT_DISPLAY_SCREEN_OFF"
+    printf '"RES_OVERRIDE_ENABLED":%s,' "$RES_OVERRIDE_ENABLED"
+    printf '"RES_OVERRIDE_SCOPE":"%s",' "$(json_escape "$RES_OVERRIDE_SCOPE")"
+    printf '"RES_OVERRIDE_PRESET":"%s",' "$(json_escape "$RES_OVERRIDE_PRESET")"
+    printf '"RES_OVERRIDE_DENSITY":"%s",' "$(json_escape "$RES_OVERRIDE_DENSITY")"
+    printf '"FREEZER_ENABLED":%s,' "$FREEZER_ENABLED"
+    printf '"THERMAL_ALERT_ENABLED":%s,' "$THERMAL_ALERT_ENABLED"
+    printf '"THERMAL_ALERT_BATT_C":%s,' "$THERMAL_ALERT_BATT_C"
+    printf '"THERMAL_ALERT_CPU_C":%s,' "$THERMAL_ALERT_CPU_C"
+    printf '"THERMAL_ALERT_ACTION":"%s",' "$(json_escape "$THERMAL_ALERT_ACTION")"
+    printf '"BYPASS_CHARGING":%s,' "$BYPASS_CHARGING"
+    printf '"BYPASS_MIN_PCT":%s,' "$BYPASS_MIN_PCT"
+    printf '"THERMAL_WARN_BATT":%s,' "$THERMAL_WARN_BATT"
+    printf '"THERMAL_HOT_BATT":%s,' "$THERMAL_HOT_BATT"
+    printf '"THERMAL_CRIT_BATT":%s,' "$THERMAL_CRIT_BATT"
+    printf '"THERMAL_WARN_CPU":%s,' "$THERMAL_WARN_CPU"
+    printf '"THERMAL_HOT_CPU":%s,' "$THERMAL_HOT_CPU"
+    printf '"THERMAL_CRIT_CPU":%s,' "$THERMAL_CRIT_CPU"
+    printf '"NET_OPT_ENABLED":%s,' "$NET_OPT_ENABLED"
+    printf '"NET_WIFI_LOW_LATENCY":%s,' "$NET_WIFI_LOW_LATENCY"
+    printf '"NET_PING_HOST":"%s",' "$(json_escape "$NET_PING_HOST")"
+    printf '"KEEP_BACKUPS_ON_UNINSTALL":%s' "$KEEP_BACKUPS_ON_UNINSTALL"
+    printf '}\n'
+}
+
+cmd_logs() {
+    local count="${1:-80}"
+    local log_file="$KGX_DATA_DIR/logs/engine.log"
+    local first=1 line
+    kgx_sanitize_int "$count" || count=80
+    printf '{"lines":['
+    if [ -f "$log_file" ]; then
+        tail -n "$count" "$log_file" 2>/dev/null | while IFS= read -r line || [ -n "$line" ]; do
+            [ "$first" -eq 0 ] && printf ','
+            first=0
+            printf '"%s"' "$(json_escape "$line")"
+        done
+    fi
+    printf ']}\n'
+}
+
+sub="${1:-status}"
+[ $# -gt 0 ] && shift
+
+case "$sub" in
+    status)
+        cmd_status
+        ;;
+    hw)
+        hw_detect_all >/dev/null 2>&1
+        hw_to_json
+        ;;
+    games)
+        action="${1:-list}"
+        [ $# -gt 0 ] && shift
+        case "$action" in
+            list) cmd_games_list ;;
+            scan) cmd_games_scan ;;
+            get)
+                pkg="$1"
+                kgx_sanitize_pkg "$pkg" || { printf '{"ok":false,"error":"Invalid package"}\n'; exit 1; }
+                gline="$(matcher_get_effective_game "$pkg")"
+                IFS='	' read -r _s g_name g_en prof tfps g_mode g_dhz g_tprof g_net _s _s _s _s _s _s g_notes _s g_dsc g_wres <<EOF
+$gline
+EOF
+                [ -n "$g_dsc" ] || g_dsc="1.0"
+                [ -n "$g_wres" ] || g_wres="default"
+                auto_m="$(matcher_select_auto_profile "$pkg")"
+                fps_j="$(fps_analyze_json "$pkg" "$tfps" "NORMAL" "$([ "${SPOOF_ENABLED:-1}" = "1" ] && printf 1 || printf 0)")"
+                printf '{"package":"%s","name":"%s","enabled":%s,"spoof_profile":"%s","auto_recommended":"%s","target_fps":%s,"mode":"%s","display_hz":"%s","touch_profile":"%s","net_opt":%s,"downscale":"%s","wm_res":"%s","notes":"%s","fps_analysis":%s}\n' \
+                    "$(json_escape "$pkg")" "$(json_escape "$g_name")" \
+                    "$([ "$g_en" = "1" ] && printf true || printf false)" \
+                    "$(json_escape "$prof")" "$(json_escape "${auto_m%%|*}")" "$tfps" \
+                    "$(json_escape "$g_mode")" "$(json_escape "$g_dhz")" "$(json_escape "$g_tprof")" \
+                    "$([ "$g_net" = "1" ] && printf true || printf false)" \
+                    "$(json_escape "$g_dsc")" "$(json_escape "$g_wres")" "$(json_escape "$g_notes")" "$fps_j"
+                ;;
+            set)
+                cmd_games_upsert "$1" "$2" "$3" "$4" "$5" "$6" "$7" "$8" "${9:-1.0}" "${10:-default}"
+                ;;
+            set-b64)
+                decoded="$(printf '%s' "$1" | tr -d '\r\n' | base64 -d 2>/dev/null)" || { printf '{"ok":false,"error":"Invalid base64"}\n'; exit 1; }
+                IFS='	' read -r p1 p2 p3 p4 p5 p6 p7 p8 p9 p10 <<EOF
+$decoded
+EOF
+                cmd_games_upsert "$p1" "$p2" "$p3" "$p4" "$p5" "$p6" "$p7" "$p8" "${p9:-1.0}" "${p10:-default}"
+                ;;
+            remove)
+                pkg="$1"
+                kgx_sanitize_pkg "$pkg" || { printf '{"ok":false,"error":"Invalid package"}\n'; exit 1; }
+                cfg="$KGX_DATA_DIR/config/custom_games.tsv"
+                if [ -f "$cfg" ]; then
+                    awk -F '\t' -v p="$pkg" '$1!=p' "$cfg" > "$cfg.tmp.$$" && mv "$cfg.tmp.$$" "$cfg"
+                fi
+                fps_restore "$pkg" >/dev/null 2>&1 || true
+                printf '{"ok":true,"removed":"%s"}\n' "$(json_escape "$pkg")"
+                ;;
+            clear-cache)
+                pkg="$1"
+                kgx_sanitize_pkg "$pkg" || { printf '{"ok":false,"error":"Invalid package"}\n'; exit 1; }
+                command -v am >/dev/null 2>&1 && am force-stop "$pkg" >/dev/null 2>&1 || true
+                for croot in /data/data /data/user/0; do
+                    if [ -d "$croot/$pkg" ]; then
+                        rm -rf "$croot/$pkg/cache/"* "$croot/$pkg/code_cache/"* 2>/dev/null || true
+                    fi
+                done
+                kgx_log "INFO" "games" "Stopped $pkg and cleared cache."
+                printf '{"ok":true,"cleared":"%s"}\n' "$(json_escape "$pkg")"
+                ;;
+            clear-data)
+                pkg="$1"
+                kgx_sanitize_pkg "$pkg" || { printf '{"ok":false,"error":"Invalid package"}\n'; exit 1; }
+                is_prot=0
+                case "$pkg" in
+                    android|com.android.*|me.weishu.kernelsu|com.kgx.ultimate) is_prot=1 ;;
+                esac
+                if [ "$is_prot" -eq 0 ] && [ -f "$KGX_MODDIR/data/protected_pkgs.list" ]; then
+                    if grep -qx "$pkg" "$KGX_MODDIR/data/protected_pkgs.list" 2>/dev/null; then
+                        is_prot=1
+                    fi
+                fi
+                if [ "$is_prot" -eq 1 ]; then
+                    printf '{"ok":false,"error":"Protected package cannot be cleared"}\n'
+                    exit 1
+                fi
+                command -v am >/dev/null 2>&1 && am force-stop "$pkg" >/dev/null 2>&1 || true
+                command -v pm >/dev/null 2>&1 && pm clear "$pkg" >/dev/null 2>&1 || true
+                kgx_log "INFO" "games" "Cleared all app data (pm clear) for $pkg so spoof & FPS tier reload cleanly."
+                printf '{"ok":true,"cleared_data":"%s"}\n' "$(json_escape "$pkg")"
+                ;;
+            apply)
+                pkg="$1"
+                if session_activate "$pkg"; then
+                    printf '{"ok":true,"applied":"%s"}\n' "$(json_escape "$pkg")"
+                else
+                    printf '{"ok":false,"error":"Failed to activate game profile"}\n'
+                    exit 1
+                fi
+                ;;
+            restore)
+                session_deactivate "manual_restore"
+                printf '{"ok":true}\n'
+                ;;
+            *)
+                printf '{"ok":false,"error":"Unknown games subcommand"}\n'; exit 1 ;;
+        esac
+        ;;
+    profiles)
+        action="${1:-list}"
+        [ $# -gt 0 ] && shift
+        case "$action" in
+            list) cmd_profiles_list "${1:-}" ;;
+            match)
+                pkg="${1:-}"
+                auto_m="$(matcher_select_auto_profile "$pkg")"
+                bid="${auto_m%%|*}"
+                rest="${auto_m#*|}"
+                bsc="${rest%%|*}"
+                rest="${rest#*|}"
+                bcomp="${rest%%|*}"
+                brsn="${rest#*|}"
+                printf '{"package":"%s","recommended_id":"%s","score":%s,"compat":"%s","reason":"%s"}\n' \
+                    "$(json_escape "$pkg")" "$(json_escape "$bid")" "$bsc" "$(json_escape "$bcomp")" "$(json_escape "$brsn")"
+                ;;
+            create-b64)
+                decoded="$(printf '%s' "$1" | tr -d '\r\n' | base64 -d 2>/dev/null)" || { printf '{"ok":false,"error":"Invalid base64"}\n'; exit 1; }
+                IFS='	' read -r c1 c2 c3 c4 c5 c6 c7 c8 c9 c10 c11 c12 c13 c14 <<EOF
+$decoded
+EOF
+                if spoof_create_custom_profile "$c1" "$c2" "$c3" "$c4" "$c5" "$c6" "$c7" "$c8" "$c9" "$c10" "$c11" "$c12" "$c13" "$c14"; then
+                    printf '{"ok":true,"id":"%s"}\n' "$(json_escape "$c1")"
+                else
+                    printf '{"ok":false,"error":"Invalid profile parameters"}\n'; exit 1
+                fi
+                ;;
+            delete)
+                if spoof_delete_custom_profile "$1"; then
+                    printf '{"ok":true,"deleted":"%s"}\n' "$(json_escape "$1")"
+                else
+                    printf '{"ok":false,"error":"Invalid profile id"}\n'; exit 1
+                fi
+                ;;
+            conflicts)
+                spoof_check_conflicts
+                ;;
+            *)
+                printf '{"ok":false,"error":"Unknown profiles subcommand"}\n'; exit 1 ;;
+        esac
+        ;;
+    spoof)
+        action="${1:-restore}"
+        [ $# -gt 0 ] && shift
+        case "$action" in
+            apply-global)
+                gpid="${1:-${GLOBAL_SPOOF_PROFILE:-realme_14_5g}}"
+                kgx_sanitize_id "$gpid" || { printf '{"ok":false,"error":"Invalid profile id"}\n'; exit 1; }
+                drow="$(matcher_get_device_row "$gpid")" || { printf '{"ok":false,"error":"Unknown device profile"}\n'; exit 1; }
+                kgx_set_config "GLOBAL_SPOOF_PROFILE" "$gpid"
+                kgx_set_config "SPOOF_ENABLED" "1"
+                if [ "${SAFE_MODE:-0}" = "1" ]; then
+                    printf '{"ok":false,"error":"Cannot apply spoof while SAFE_MODE=1"}\n'
+                    exit 1
+                fi
+                spoof_apply_global_persistent "$gpid"
+                IFS='	' read -r _s g_lbl _s _s _s _s _s _s _s _s g_mdl _s <<EOF
+$drow
+EOF
+                sp_written="false"
+                [ -f "$KGX_MODDIR/system.prop" ] && sp_written="true"
+                printf '{"ok":true,"scope":"global_persistent","profile_id":"%s","label":"%s","model":"%s","system_prop_written":%s}\n' \
+                    "$(json_escape "$gpid")" "$(json_escape "$g_lbl")" "$(json_escape "$g_mdl")" "$sp_written"
+                ;;
+            restore)
+                spoof_clear_system_prop
+                spoof_restore 0
+                kgx_set_config "SPOOF_ENABLED" "0"
+                printf '{"ok":true}\n'
+                ;;
+            refresh-gms)
+                spoof_refresh_gms
+                printf '{"ok":true,"refreshed":true}\n'
+                ;;
+            denylist)
+                spoof_denylist_status_json
+                ;;
+            denylist-set-b64)
+                if spoof_denylist_set_b64 "${1:-}"; then
+                    spoof_denylist_status_json
+                else
+                    printf '{"ok":false,"error":"Invalid denylist base64"}\n'
+                    exit 1
+                fi
+                ;;
+            denylist-add)
+                if spoof_denylist_add "${1:-}"; then
+                    spoof_denylist_status_json
+                else
+                    printf '{"ok":false,"error":"Invalid package name"}\n'
+                    exit 1
+                fi
+                ;;
+            denylist-remove)
+                if spoof_denylist_remove "${1:-}"; then
+                    spoof_denylist_status_json
+                else
+                    printf '{"ok":false,"error":"Invalid package name"}\n'
+                    exit 1
+                fi
+                ;;
+            apps)
+                spoof_list_installed_apps_json
+                ;;
+            diag)
+                diag_zyg="false"; kgx_is_zygisk_active && diag_zyg="true"
+                diag_rz_desc="$(grep '^description=' "$KGX_MODULES_ROOT/rezygisk/module.prop" 2>/dev/null | head -n 1 | cut -d= -f2- | tr -d '\r')"
+                diag_fp_orig="$(awk -F '\t' '$1=="ro.build.fingerprint"{print $2; exit}' "$KGX_DATA_DIR/state/orig_props.tsv" 2>/dev/null | tr -d '\r')"
+                diag_fp_cur="$(getprop ro.build.fingerprint 2>/dev/null | tr -d '\r')"
+                diag_fp_ok="false"
+                [ -z "$diag_fp_orig" ] || [ "$diag_fp_orig" = "$diag_fp_cur" ] && diag_fp_ok="true"
+                diag_procs=""
+                diag_cnt=0
+                if command -v logcat >/dev/null 2>&1; then
+                    for dp in $(logcat -d -s KGX_PIShield 2>/dev/null | awk '/Shield active in / { sub(/.*Shield active in /, ""); sub(/ \(.*/, ""); if (!s[$0]++) print $0 }'); do
+                        [ "$diag_cnt" -gt 0 ] && diag_procs="${diag_procs},"
+                        diag_procs="${diag_procs}\"$(json_escape "$dp")\""
+                        diag_cnt=$((diag_cnt + 1))
+                    done
+                fi
+                printf '{"ok":true,"zygisk_active":%s,"rezygisk_desc":"%s","fingerprint_stock":%s,"shielded_count":%s,"shielded_procs":[%s],"recent_logs":[]}\n' \
+                    "$diag_zyg" "$(json_escape "$diag_rz_desc")" "$diag_fp_ok" "$diag_cnt" "$diag_procs"
+                ;;
+            *)
+                printf '{"ok":false,"error":"Unknown spoof subcommand"}\n'; exit 1 ;;
+        esac
+        ;;
+    engine)
+        action="${1:-get}"
+        [ $# -gt 0 ] && shift
+        case "$action" in
+            get) cmd_engine_get ;;
+            set)
+                if [ "$1" = "GLOBAL_SPOOF_PROFILE" ]; then
+                    matcher_get_device_row "$2" >/dev/null 2>&1 || { printf '{"ok":false,"error":"Unknown device profile"}\n'; exit 1; }
+                fi
+                if kgx_set_config "$1" "$2"; then
+                    kgx_load_config
+                    case "$1" in
+                        SAFE_MODE)
+                            if [ "$2" = "1" ]; then
+                                session_deactivate "safe_mode_enabled" >/dev/null 2>&1 || true
+                                freezer_unfreeze_all >/dev/null 2>&1 || true
+                                display_res_reset 1 >/dev/null 2>&1 || true
+                                display_internal_power_on >/dev/null 2>&1 || true
+                                gos_restore >/dev/null 2>&1 || true
+                                spoof_clear_system_prop
+                                spoof_restore 0 >/dev/null 2>&1 || true
+                            elif [ "${SPOOF_ENABLED:-1}" = "1" ]; then
+                                spoof_apply_global_persistent "${GLOBAL_SPOOF_PROFILE:-realme_14_5g}" >/dev/null 2>&1 || true
+                            fi
+                            ;;
+                        SPOOF_ENABLED|GLOBAL_SPOOF_PROFILE)
+                            if [ "${SAFE_MODE:-0}" = "1" ] || [ "${SPOOF_ENABLED:-1}" != "1" ]; then
+                                spoof_clear_system_prop
+                                spoof_restore 0 >/dev/null 2>&1 || true
+                            else
+                                spoof_apply_global_persistent "${GLOBAL_SPOOF_PROFILE:-realme_14_5g}" >/dev/null 2>&1 || true
+                            fi
+                            ;;
+                        SPOOF_EXCLUDE_SETTINGS)
+                            command -v am >/dev/null 2>&1 && am force-stop com.android.settings >/dev/null 2>&1 || true
+                            ;;
+                        THERMAL_UNLOCK|SUSTAINED_SWEET_SPOT)
+                            if [ -f "$KGX_DATA_DIR/state/active_session.env" ]; then
+                                . "$KGX_DATA_DIR/state/active_session.env"
+                                if [ "${THERMAL_UNLOCK:-0}" = "1" ] || [ "${SUSTAINED_SWEET_SPOT:-0}" = "1" ]; then
+                                    thermal_apply_unlock >/dev/null 2>&1 || true
+                                    cpu_gpu_apply "${ACTIVE_BASE_MODE:-$DEFAULT_MODE}" "${ACTIVE_PID:-}" 0 >/dev/null 2>&1 || true
+                                    thermal_lock_sysfs_ceilings >/dev/null 2>&1 || true
+                                else
+                                    thermal_restore_unlock >/dev/null 2>&1 || true
+                                    cpu_gpu_apply "${ACTIVE_BASE_MODE:-$DEFAULT_MODE}" "${ACTIVE_PID:-}" 0 >/dev/null 2>&1 || true
+                                fi
+                            fi
+                            ;;
+                        MAX_CLOCK_LOCK)
+                            if [ -f "$KGX_DATA_DIR/state/active_session.env" ]; then
+                                . "$KGX_DATA_DIR/state/active_session.env"
+                                cpu_gpu_apply "${ACTIVE_BASE_MODE:-$DEFAULT_MODE}" "${ACTIVE_PID:-}" 0 >/dev/null 2>&1 || true
+                            fi
+                            ;;
+                        BYPASS_CHARGING|BYPASS_MIN_PCT)
+                            if [ -f "$KGX_DATA_DIR/state/active_session.env" ]; then
+                                power_bypass_update >/dev/null 2>&1 || true
+                            elif [ "${BYPASS_CHARGING:-0}" != "1" ]; then
+                                power_bypass_restore >/dev/null 2>&1 || true
+                            fi
+                            ;;
+                        GOS_NEUTRALIZE)
+                            if [ "$2" = "1" ] && [ "${SAFE_MODE:-0}" != "1" ]; then
+                                gos_apply >/dev/null 2>&1 || true
+                            else
+                                gos_restore >/dev/null 2>&1 || true
+                            fi
+                            ;;
+                        EXT_DISPLAY_SCREEN_OFF)
+                            display_ext_sync >/dev/null 2>&1 || true
+                            ;;
+                        SOFT_THERMAL_STEP)
+                            if [ -f "$KGX_DATA_DIR/state/active_session.env" ]; then
+                                . "$KGX_DATA_DIR/state/active_session.env"
+                                thermal_monitor_step "$ACTIVE_PKG" "${ACTIVE_BASE_MODE:-$DEFAULT_MODE}" "${ACTIVE_BASE_FPS:-60}" "${ACTIVE_PID:-}" >/dev/null 2>&1 || true
+                            elif [ "$2" = "0" ]; then
+                                rm -f "$KGX_DATA_DIR/state/soft_step.tier" 2>/dev/null || true
+                            fi
+                            ;;
+                        RES_OVERRIDE_ENABLED|RES_OVERRIDE_SCOPE|RES_OVERRIDE_PRESET|RES_OVERRIDE_DENSITY)
+                            display_res_sync >/dev/null 2>&1 || true
+                            ;;
+                        FREEZER_ENABLED)
+                            if [ "$2" = "1" ] && [ "${SAFE_MODE:-0}" != "1" ]; then
+                                freezer_sync >/dev/null 2>&1 || true
+                            else
+                                freezer_unfreeze_all >/dev/null 2>&1 || true
+                            fi
+                            ;;
+                        THERMAL_ALERT_ENABLED|THERMAL_ALERT_BATT_C|THERMAL_ALERT_CPU_C|THERMAL_ALERT_ACTION)
+                            if [ -f "$KGX_DATA_DIR/state/active_session.env" ]; then
+                                . "$KGX_DATA_DIR/state/active_session.env"
+                                thermal_monitor_step "$ACTIVE_PKG" "${ACTIVE_BASE_MODE:-$DEFAULT_MODE}" "${ACTIVE_BASE_FPS:-60}" "${ACTIVE_PID:-}" >/dev/null 2>&1 || true
+                            fi
+                            ;;
+                    esac
+                    printf '{"ok":true,"key":"%s","value":"%s"}\n' "$(json_escape "$1")" "$(json_escape "$2")"
+                else
+                    printf '{"ok":false,"error":"Invalid config key or value"}\n'; exit 1
+                fi
+                ;;
+            *)
+                printf '{"ok":false,"error":"Unknown engine subcommand"}\n'; exit 1 ;;
+        esac
+        ;;
+    touch)
+        action="${1:-measure}"
+        case "$action" in
+            measure) touch_measure_rate 2 ;;
+            *) printf '{"ok":false,"error":"Unknown touch subcommand"}\n'; exit 1 ;;
+        esac
+        ;;
+    net)
+        action="${1:-test}"
+        [ $# -gt 0 ] && shift
+        case "$action" in
+            test) network_measure_ping "${1:-}" ;;
+            *) printf '{"ok":false,"error":"Unknown net subcommand"}\n'; exit 1 ;;
+        esac
+        ;;
+    backup)
+        action="${1:-list}"
+        [ $# -gt 0 ] && shift
+        case "$action" in
+            create) backup_create "${1:-manual}" ;;
+            list) backup_list ;;
+            restore) backup_restore "$1" ;;
+            *) printf '{"ok":false,"error":"Unknown backup subcommand"}\n'; exit 1 ;;
+        esac
+        ;;
+    logs)
+        if [ "$1" = "clear" ]; then
+            : > "$KGX_DATA_DIR/logs/engine.log"
+            kgx_log "INFO" "logs" "Log cleared by user."
+            printf '{"ok":true}\n'
+        else
+            cmd_logs "${1:-80}"
+        fi
+        ;;
+        safemode)
+        case "$1" in
+            on)
+                kgx_set_config "SAFE_MODE" "1"
+                session_deactivate "safe_mode_on" >/dev/null 2>&1 || true
+                display_res_reset 1 >/dev/null 2>&1 || true
+                display_internal_power_on >/dev/null 2>&1 || true
+                gos_restore >/dev/null 2>&1 || true
+                spoof_clear_system_prop
+                cmd_daemon stop >/dev/null 2>&1 || true
+                printf '{"ok":true,"safe_mode":true}\n'
+                ;;
+            off)
+                kgx_set_config "SAFE_MODE" "0"
+                printf '0\n' > "$KGX_DATA_DIR/state/boot_counter"
+                kgx_load_config
+                if [ "${SPOOF_ENABLED:-1}" = "1" ]; then
+                    spoof_apply_global_persistent "${GLOBAL_SPOOF_PROFILE:-realme_14_5g}" >/dev/null 2>&1 || true
+                fi
+                printf '{"ok":true,"safe_mode":false}\n'
+                ;;
+            *)
+                printf '{"ok":false,"error":"Usage: safemode on|off"}\n'; exit 1 ;;
+        esac
+        ;;
+    daemon)
+        cmd_daemon "${1:-status}"
+        ;;
+    fps)
+        fps_p="${1:-}"
+        if [ -z "$fps_p" ] && [ -f "$KGX_DATA_DIR/state/active_session.env" ]; then
+            . "$KGX_DATA_DIR/state/active_session.env"
+            fps_p="${ACTIVE_PKG:-}"
+        fi
+        lf="$(fps_read_live "$fps_p" 0)"
+        printf '{"live":%s,"low1":null,"source":"%s"}\n' "$lf" "$([ "$lf" != "null" ] && printf drm || printf none)"
+        ;;
+    overlay-tick)
+        hw_load
+        ov_pkg="${1:-}"
+        if [ -z "$ov_pkg" ] && [ -f "$KGX_DATA_DIR/state/active_session.env" ]; then
+            . "$KGX_DATA_DIR/state/active_session.env"
+            ov_pkg="${ACTIVE_PKG:-}"
+        fi
+        [ -n "$ov_pkg" ] || ov_pkg="$(session_get_foreground_pkg 2>/dev/null || true)"
+        ov_fps="$(fps_read_live "$ov_pkg" 0)"
+        ov_src="$( [ "$ov_fps" != "null" ] && printf drm || printf none )"
+        ov_cpu_pct="$(cpu_gpu_read_cpu_pct)"
+        ov_temps="$(thermal_read_temps)"
+        IFS='|' read -r ov_batt_c ov_cpu_c ov_gpu_c <<EOF
+$ov_temps
+EOF
+        ov_cg="$(cpu_gpu_read_telemetry)"
+        ov_gpu_pct="$(printf '%s' "$ov_cg" | sed -n 's/.*"gpu_pct":\([0-9]*\).*/\1/p')"
+        ov_gpu_mhz="$(printf '%s' "$ov_cg" | sed -n 's/.*"gpu_cur_mhz":\([0-9]*\).*/\1/p')"
+        ov_pol="${CPU_BIG_POLICY:-${CPU_MID_POLICY:-${CPU_LITTLE_POLICY:-policy0}}}"
+        ov_cpu_mhz=0
+        if [ -r "$KGX_SYS_ROOT/devices/system/cpu/cpufreq/$ov_pol/scaling_cur_freq" ]; then
+            ov_cpu_mhz=$(( $(cat "$KGX_SYS_ROOT/devices/system/cpu/cpufreq/$ov_pol/scaling_cur_freq" 2>/dev/null | tr -dc '0-9' || printf 0) / 1000 ))
+        fi
+        ov_ram="$(ram_get_metrics)"
+        IFS='|' read -r ov_ram_tot _s ov_ram_used ov_ram_pct _s <<EOF
+$ov_ram
+EOF
+        ov_bpct="$(power_get_batt_pct)"
+        ov_pm="$(power_read_mw 2>/dev/null || printf '0|0|0\n')"
+        IFS='|' read -r ov_pmw ov_pma ov_pchg <<EOF
+$ov_pm
+EOF
+        ov_chg_b="false"; [ "${ov_pchg:-0}" = "1" ] && ov_chg_b="true"
+        ov_stier=0
+        [ -f "$KGX_DATA_DIR/state/soft_step.tier" ] && ov_stier="$(cat "$KGX_DATA_DIR/state/soft_step.tier" 2>/dev/null | head -n 1 | tr -dc '0-9')"
+        [ -n "$ov_stier" ] || ov_stier=0
+        ov_al="false"; ov_almsg=""
+        if [ "${THERMAL_ALERT_ENABLED:-1}" = "1" ]; then
+            if [ "${ov_batt_c:-0}" -ge "${THERMAL_ALERT_BATT_C:-44}" ] 2>/dev/null; then
+                ov_al="true"
+                ov_almsg="Pin ${ov_batt_c}°C"
+            fi
+            if [ "${ov_cpu_c:-0}" -ge "${THERMAL_ALERT_CPU_C:-92}" ] 2>/dev/null; then
+                ov_al="true"
+                ov_almsg="${ov_almsg:+${ov_almsg} · }CPU ${ov_cpu_c}°C"
+            fi
+        fi
+        ov_ts="$(date '+%s' 2>/dev/null || printf 0)"
+        printf '{"ok":true,"ts":%s,"pkg":"%s","fps":%s,"low1":null,"fps_src":"%s","cpu_pct":%s,"cpu_c":%s,"cpu_mhz":%s,"gpu_pct":%s,"gpu_mhz":%s,"gpu_c":%s,"ram_used_mb":%s,"ram_total_mb":%s,"ram_pct":%s,"batt_c":%s,"batt_pct":%s,"power_mw":%s,"current_ma":%s,"charging":%s,"soft_step":%s,"thermal_alert":%s,"thermal_alert_msg":"%s"}\n' \
+            "${ov_ts:-0}" "$(json_escape "$ov_pkg")" "$ov_fps" "$ov_src" \
+            "${ov_cpu_pct:-0}" "${ov_cpu_c:-0}" "${ov_cpu_mhz:-0}" \
+            "${ov_gpu_pct:-0}" "${ov_gpu_mhz:-0}" "${ov_gpu_c:-0}" \
+            "${ov_ram_used:-0}" "${ov_ram_tot:-0}" "${ov_ram_pct:-0}" \
+            "${ov_batt_c:-0}" "${ov_bpct:-0}" "${ov_pmw:-0}" "${ov_pma:-0}" "$ov_chg_b" "$ov_stier" "$ov_al" "$(json_escape "$ov_almsg")"
+        ;;
+    display)
+        action="${1:-ext-status}"
+        [ $# -gt 0 ] && shift
+        case "$action" in
+            ext-status)
+                d_en="false"; [ "${EXT_DISPLAY_SCREEN_OFF:-0}" = "1" ] && d_en="true"
+                d_name="$(display_ext_detect 2>/dev/null || true)"
+                d_conn="false"; [ -n "$d_name" ] && d_conn="true"
+                d_off="false"; [ -f "$KGX_DATA_DIR/state/ext_internal_off.state" ] && d_off="true"
+                printf '{"ok":true,"enabled":%s,"connected":%s,"internal_screen_off":%s,"external_name":"%s"}\n' \
+                    "$d_en" "$d_conn" "$d_off" "$(json_escape "$d_name")"
+                ;;
+            internal-power)
+                mode_arg="${1:-on}"
+                case "$mode_arg" in
+                    on)
+                        display_internal_power_on
+                        printf '{"ok":true,"internal_screen_off":false}\n'
+                        ;;
+                    off)
+                        if display_internal_power_off; then
+                            printf '{"ok":true,"internal_screen_off":true}\n'
+                        else
+                            printf '{"ok":false,"internal_screen_off":false,"error":"No external display connected or helper unavailable"}\n'
+                        fi
+                        ;;
+                    *)
+                        printf '{"ok":false,"error":"Usage: display internal-power on|off"}\n'; exit 1 ;;
+                esac
+                ;;
+            ext-sync)
+                display_ext_sync
+                d_conn="false"; display_ext_is_connected && d_conn="true"
+                d_off="false"; [ -f "$KGX_DATA_DIR/state/ext_internal_off.state" ] && d_off="true"
+                printf '{"ok":true,"connected":%s,"internal_screen_off":%s}\n' "$d_conn" "$d_off"
+                ;;
+            res-status)
+                ACTIVE_RES=""; ACTIVE_DENSITY=""; ACTIVE_RES_SOURCE=""
+                [ -f "$KGX_DATA_DIR/state/active_res.env" ] && . "$KGX_DATA_DIR/state/active_res.env"
+                r_en="false"; [ "${RES_OVERRIDE_ENABLED:-0}" = "1" ] && r_en="true"
+                r_act="false"; [ -n "$ACTIVE_RES" ] && r_act="true"
+                printf '{"ok":true,"enabled":%s,"scope":"%s","preset":"%s","density":"%s","active":%s,"current_res":"%s","current_density":"%s","source":"%s"}\n' \
+                    "$r_en" "$(json_escape "${RES_OVERRIDE_SCOPE:-ext_scrcpy}")" "$(json_escape "${RES_OVERRIDE_PRESET:-1080x1920}")" \
+                    "$(json_escape "${RES_OVERRIDE_DENSITY:-auto}")" "$r_act" \
+                    "$(json_escape "$ACTIVE_RES")" "$(json_escape "$ACTIVE_DENSITY")" "$(json_escape "$ACTIVE_RES_SOURCE")"
+                ;;
+            res-sync)
+                display_res_sync
+                ACTIVE_RES=""; ACTIVE_DENSITY=""; ACTIVE_RES_SOURCE=""
+                [ -f "$KGX_DATA_DIR/state/active_res.env" ] && . "$KGX_DATA_DIR/state/active_res.env"
+                r_act="false"; [ -n "$ACTIVE_RES" ] && r_act="true"
+                printf '{"ok":true,"active":%s,"current_res":"%s","current_density":"%s","source":"%s"}\n' \
+                    "$r_act" "$(json_escape "$ACTIVE_RES")" "$(json_escape "$ACTIVE_DENSITY")" "$(json_escape "$ACTIVE_RES_SOURCE")"
+                ;;
+            res-reset)
+                display_res_reset 1
+                printf '{"ok":true,"active":false}\n'
+                ;;
+            restore)
+                display_restore
+                printf '{"ok":true,"restored":true}\n'
+                ;;
+            recover)
+                display_recover_on_boot
+                printf '{"ok":true,"recovered":true}\n'
+                ;;
+            *)
+                printf '{"ok":false,"error":"Unknown display subcommand"}\n'; exit 1 ;;
+        esac
+        ;;
+    freezer)
+        action="${1:-status}"
+        [ $# -gt 0 ] && shift
+        case "$action" in
+            status)
+                freezer_status_json
+                ;;
+            set-b64)
+                if freezer_set_list_b64 "$1"; then
+                    freezer_status_json
+                else
+                    printf '{"ok":false,"error":"Invalid freezer list base64"}\n'; exit 1
+                fi
+                ;;
+            add)
+                kgx_sanitize_pkg "$1" || { printf '{"ok":false,"error":"Invalid package"}\n'; exit 1; }
+                freezer_is_protected_pkg "$1" && { printf '{"ok":false,"error":"Protected package"}\n'; exit 1; }
+                flist="$KGX_DATA_DIR/config/freezer_apps.list"
+                mkdir -p "$KGX_DATA_DIR/config" 2>/dev/null || true
+                grep -qx "$1" "$flist" 2>/dev/null || printf '%s\n' "$1" >> "$flist"
+                freezer_sync
+                freezer_status_json
+                ;;
+            remove)
+                kgx_sanitize_pkg "$1" || { printf '{"ok":false,"error":"Invalid package"}\n'; exit 1; }
+                flist="$KGX_DATA_DIR/config/freezer_apps.list"
+                if [ -f "$flist" ]; then
+                    awk -v p="$1" '$0!=p' "$flist" > "$flist.tmp.$$" && mv "$flist.tmp.$$" "$flist"
+                fi
+                freezer_sync
+                freezer_status_json
+                ;;
+            sync)
+                freezer_sync "${1:-}"
+                freezer_status_json
+                ;;
+            unfreeze-all)
+                freezer_unfreeze_all
+                freezer_status_json
+                ;;
+            *)
+                printf '{"ok":false,"error":"Unknown freezer subcommand"}\n'; exit 1 ;;
+        esac
+        ;;
+    internal)
+        action="${1:-}"
+        case "$action" in
+            thermal-step)
+                if [ -f "$KGX_DATA_DIR/state/active_session.env" ]; then
+                    . "$KGX_DATA_DIR/state/active_session.env"
+                    thermal_monitor_step "$ACTIVE_PKG" "${ACTIVE_BASE_MODE:-$DEFAULT_MODE}" "${ACTIVE_BASE_FPS:-60}" "${ACTIVE_PID:-}"
+                else
+                    power_bypass_restore >/dev/null 2>&1 || true
+                fi
+                printf '{"ok":true}\n'
+                ;;
+            *)
+                printf '{"ok":false,"error":"Unknown internal subcommand"}\n'; exit 1 ;;
+        esac
+        ;;
+    system)
+        action="${1:-status}"
+        case "$action" in
+        soft-reboot)
+            if [ -f "$KGX_DATA_DIR/state/active_session.env" ]; then
+                session_deactivate "soft_reboot" >/dev/null 2>&1 || true
+            elif [ -f "$KGX_DATA_DIR/state/active_display.env" ]; then
+                display_restore >/dev/null 2>&1 || true
+            fi
+            if [ -x /data/adb/ksud ]; then
+                kgx_log "INFO" "system" "Triggering safe ksud soft-reboot requested by app."
+                kgx_kill_stale_daemons
+                if [ -d /data/adb/modules/rezygisk ] && [ ! -f /data/adb/modules/rezygisk/disable ]; then
+                    for zproc in zygisk-ptrace64 zygisk-ptrace32 zygiskd64 zygiskd32; do
+                        killall -9 "$zproc" >/dev/null 2>&1 || true
+                        pkill -9 -f "$zproc" >/dev/null 2>&1 || true
+                    done
+                fi
+                (/data/adb/ksud soft-reboot >/dev/null 2>&1 &)
+                printf '{"ok":true,"soft_reboot":true}\n'
+            else
+                printf '{"ok":false,"error":"/data/adb/ksud not available"}\n'
+                exit 1
+            fi
+            ;;
+            *)
+                printf '{"ok":false,"error":"Unknown system subcommand"}\n'; exit 1 ;;
+        esac
+        ;;
+    rollback)
+        session_deactivate "full_rollback"
+        freezer_unfreeze_all >/dev/null 2>&1 || true
+        display_res_reset 1 >/dev/null 2>&1 || true
+        display_internal_power_on >/dev/null 2>&1 || true
+        gos_restore >/dev/null 2>&1 || true
+        printf '{"ok":true,"rolled_back":true}\n'
+        ;;
+    *)
+        printf '{"ok":false,"error":"Unknown command: %s"}\n' "$(json_escape "$sub")"
+        exit 1
+        ;;
+esac

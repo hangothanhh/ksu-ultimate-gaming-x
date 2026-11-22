@@ -1,0 +1,21 @@
+# Release build artifacts (distributed via GitHub Releases)
+dist/
+*.zip
+*.apk
+*.apk.idsig
+*.sha256
+
+# Signing keys & generated module props
+*.keystore
+*.jks
+*.pem
+module/system.prop
+
+# Python / build / IDE temporary caches
+**/__pycache__/
+*.py[cod]
+companion/**/target/
+companion/**/build/
+*.tmp
+.DS_Store
+Thumbs.db
