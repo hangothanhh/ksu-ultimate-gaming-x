@@ -6,7 +6,7 @@ Bộ tối ưu hiệu năng chơi game, điều phối xung nhiệt, bảo vệ 
 - **Trạng thái phát triển**: Phát hành công khai đầu tiên (`VERIFIED` trên Samsung Galaxy S22 Exynos; `PARTIAL` dạng mock cho Adreno/Mali)
 - **Nền tảng**: Android ARM64 (`arm64-v8a`, Android 8.0+ / API >= 26, tối ưu đầy đủ cho Android 12+ / API >= 31)
 - **Công nghệ**: POSIX Shell (`module/`), Native Rust ARM64 (`companion/rust-core`, không crate ngoài), C++17 Zygisk API v4 (`companion/zygisk-spoof`), Android SDK Java + Rust JNI (`companion/android-app`)
-- **Liên kết chính thức**: [GitHub Releases](https://github.com/hangothanhh/ksu-ultimate-gaming-x/releases) · [Báo lỗi (Issues)](https://github.com/hangothanhh/ksu-ultimate-gaming-x/issues) · [Giấy phép (MIT LICENSE)](LICENSE) · [CHANGELOG](CHANGELOG.md)
+- **Liên kết chính thức**: [GitHub Releases](https://github.com/hangothanhh/ksu-ultimate-gaming-x/releases) · [Báo lỗi (Issues)](https://github.com/hangothanhh/ksu-ultimate-gaming-x/issues) · [Giấy phép (GNU GPLv3+)](LICENSE) · [CHANGELOG](CHANGELOG.md)
 
 > [!WARNING]
 > **Minh bạch về AI & Cảnh báo "AI Slop":**
@@ -66,7 +66,7 @@ Bộ tối ưu hiệu năng chơi game, điều phối xung nhiệt, bảo vệ 
 > 9. **Không đảm bảo mọi game cho phép module chạy** hoặc không phát hiện môi trường root/Zygisk.
 > 10. **Module KHÔNG vô hiệu hóa Thermal Protection phần cứng**: Các ngưỡng ngắt nhiệt bảo vệ chip (`trip_point_*`) luôn được giữ nguyên.
 > 11. **Tính năng Experimental (`THERMAL_UNLOCK=1`, áp dụng trên SoC/máy chưa kiểm chứng thực tế)**: Có thể làm máy nóng rất nhanh và sụt FPS vì thermal throttling nặng hơn — không bật nếu chưa có tản nhiệt và chưa sao lưu.
-> 12. **Người dùng tự chịu hoàn toàn trách nhiệm** khi cài đặt và sử dụng phần mềm này theo điều khoản giấy phép MIT.
+> 12. **Người dùng tự chịu hoàn toàn trách nhiệm** khi cài đặt và sử dụng phần mềm này theo điều khoản giấy phép GNU GPL v3.0 hoặc mới hơn (`GPL-3.0-or-later`).
 
 ### 6 việc BẮT BUỘC phải làm trước khi cài
 1. **Sao lưu dữ liệu quan trọng** (ảnh, tin nhắn, tài liệu, mã 2FA) ra ngoài điện thoại.
@@ -211,7 +211,7 @@ ksu-ultimate-gaming-x/
 ├── README.md                          # Tài liệu tổng quan & hướng dẫn người mới
 ├── CHANGELOG.md                       # Lịch sử phiên bản chính thức
 ├── CONTRIBUTING.md                    # Quy chuẩn đóng góp & chính sách chống AI slop
-├── LICENSE                            # Giấy phép MIT (hangothanhh)
+├── LICENSE                            # Giấy phép GNU GPL v3.0+ (GPL-3.0-or-later)
 ├── NOTICE                             # Ghi công bên thứ ba & minh bạch AI
 ├── SECURITY.md                        # Chính sách bảo mật & ranh giới an toàn root
 ├── .gitignore                         # Loại trừ keystore, dist/, system.prop, cache build
@@ -273,5 +273,5 @@ python -u tests/verify_all.py
 
 - **Đóng góp & Quy chuẩn PR**: Xem **[CONTRIBUTING.md](CONTRIBUTING.md)** (chú ý quy tắc bắt buộc về minh bạch AI và chống *AI slop*).
 - **Chính sách bảo mật**: Xem **[SECURITY.md](SECURITY.md)**.
-- **Giấy phép**: Phát hành theo **[MIT License](LICENSE)** — Copyright (c) 2026 `hangothanhh`.
+- **Giấy phép**: Phát hành theo **[GNU General Public License v3.0 hoặc mới hơn (`GPL-3.0-or-later`)](LICENSE)** — Copyright (C) 2026 `hangothanhh`.
 - **Ghi công & Nguồn bên thứ ba**: Xem **[NOTICE](NOTICE)** (bao gồm header public Zygisk API v4 trong `companion/zygisk-spoof/include/zygisk.hpp` — Copyright 2022–2023 John "topjohnwu" Wu).

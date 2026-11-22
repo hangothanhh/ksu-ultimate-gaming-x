@@ -4,6 +4,13 @@ Mọi thay đổi đáng chú ý của dự án **KSU Ultimate Gaming X** đều
 
 ---
 
+## [Unreleased] (Post-v1.0.0 Governance Update)
+
+### Changed
+- Chuyển giấy phép mã nguồn của repository trên nhánh `main` từ MIT sang **GNU General Public License v3.0 hoặc mới hơn (`GPL-3.0-or-later`)** kể từ commit cập nhật giấy phép (bản phát hành nhị phân `v1.0.0` giữ nguyên số hiệu, mã nguồn/tài liệu đồng bộ theo `GPL-3.0-or-later`).
+
+---
+
 ## v1.0.0 (2026-11-22)
 
 Phiên bản phát hành công khai đầu tiên (`versionCode=100`, tag `v1.0.0`).

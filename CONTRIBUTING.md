@@ -67,8 +67,9 @@ Sử dụng tiền tố rõ ràng:
 ## 3. Các quy định an toàn bắt buộc
 
 PR sẽ bị từ chối ngay nếu vi phạm một trong các mục sau:
+- Không đồng ý phát hành phần đóng góp dưới giấy phép của dự án (**GNU GPL v3.0 hoặc mới hơn — `GPL-3.0-or-later`**).
 - Chứa private key, file `*.keystore`, `*.jks`, API token, GitHub credentials, hoặc log cá nhân chưa ẩn IMEI/serial/MAC/email.
-- Thêm dependency không rõ nguồn gốc hoặc thư viện nhị phân đóng (closed-source) không kèm nguồn/giấy phép.
+- Thêm dependency không rõ nguồn gốc (hoặc không tương thích GPLv3+) hay thư viện nhị phân đóng (closed-source) không kèm nguồn/giấy phép.
 - Sửa đổi hoặc vô hiệu hóa kiểm tra chống ghi `ro.serialno`, `ro.boot.*`, `trip_point_*`, `*ifpo*`.
 - Bổ sung mã bypass anti-cheat của game hoặc giả mạo hardware attestation keys.
 - Không giữ nguyên copyright notice trong [companion/zygisk-spoof/include/zygisk.hpp](companion/zygisk-spoof/include/zygisk.hpp).
