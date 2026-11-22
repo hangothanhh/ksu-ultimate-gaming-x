@@ -1,0 +1,23 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = false
+trim_trailing_whitespace = false
+
+[*.{sh,conf,list,tsv,json,prop,py,rs,cpp,hpp,c,h,java,xml,md,yml,yaml}]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 4
+
+[*.{yml,yaml,json}]
+indent_size = 2
+
+[*.tsv]
+indent_style = tab
+
+[{module/bin/kgxctl,module/META-INF/com/google/android/update-binary}]
+charset = utf-8
+end_of_line = lf

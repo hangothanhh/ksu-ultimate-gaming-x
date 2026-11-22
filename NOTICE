@@ -1,0 +1,45 @@
+THIRD-PARTY NOTICES & DEVELOPMENT TRANSPARENCY
+================================================
+
+Project: KSU Ultimate Gaming X (v1.0.0)
+Repository: https://github.com/hangothanhh/ksu-ultimate-gaming-x
+
+----------------------------------------------------------------------
+1. THIRD-PARTY SOURCE CODE INCLUDED IN THIS REPOSITORY
+----------------------------------------------------------------------
+
+1.1 Zygisk Public API Header (`companion/zygisk-spoof/include/zygisk.hpp`)
+- Copyright 2022-2023 John "topjohnwu" Wu
+- Original project: Magisk (Zygisk API v4 header)
+- License: Permissive ISC-style notice preserved verbatim at the top of `zygisk.hpp`
+  ("Permission to use, copy, modify, and/or distribute this software for any
+  purpose with or without fee is hereby granted.")
+
+----------------------------------------------------------------------
+2. EXTERNAL ECOSYSTEM TOOLS & RUNTIME DEPENDENCIES (NOT BUNDLED SOURCE)
+----------------------------------------------------------------------
+
+- KernelSU / ReZygisk / Zygisk Next: root & Zygisk injection runtime required on the target Android device (installed separately by the user under their respective licenses).
+- Rust standard library (`rustc` `aarch64-linux-android` target) & Android NDK: compiled natively without external third-party Rust crates.
+- Android SDK (`aapt2`, `d8`, `zipalign`, `apksigner`) & OpenJDK 17: used by `scripts/build_apk.py`.
+
+----------------------------------------------------------------------
+3. AI-ASSISTED DEVELOPMENT & REVIEW TRANSPARENCY (ANTI-AI-SLOP NOTICE)
+----------------------------------------------------------------------
+
+Parts of the source code, Rust daemon logic, C++ Zygisk hooks, companion Android UI,
+automated mock test harness (`tests/verify_all.py`), and repository documentation were
+written or refactored with AI coding assistance and iteratively tested against:
+- Real device testing on Samsung Galaxy S22 Exynos (SM-S901B, Android 12 / One UI 4.1,
+  KernelSU temproot + ReZygisk) for Exynos/LTPO/display/crash/game-session scenarios; and
+- POSIX mock verification (`tests/verify_all.py`) for Adreno, Mali, and Exynos paths.
+
+IMPORTANT NOTICE ABOUT AI-GENERATED ARTIFACTS ("AI SLOP" WARNING):
+- AI-assisted code and documentation can contain subtle edge-case bugs, stale assumptions,
+  untested hardware paths (especially on devices NOT personally tested by the maintainer),
+  or over-broad heuristics.
+- Only scenarios explicitly marked `VERIFIED` have been tested on physical hardware by the
+  project maintainer. Adreno and Mali profiles are currently tested via mock environments
+  (`PARTIAL`) and have not been verified on physical devices.
+- Pull requests containing unverified AI-generated tweaks ("AI slop"), fabricated device
+  compatibility claims, or untested shell scripts will be rejected (see `CONTRIBUTING.md`).
