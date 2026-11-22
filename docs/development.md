@@ -1,48 +1,50 @@
-# Hướng dẫn Build từ Mã nguồn (Build from Source)
+# Build from Source & Verification Guide
 
-## 1. Mục đích
-Tài liệu dành cho lập trình viên muốn tự biên dịch Module KernelSU ZIP, nhị phân Rust ARM64 (`kgx-core`, `libkgx_rust.so`), thư viện Zygisk C++ (`arm64-v8a.so`), và Companion Android APK (`KSU-Ultimate-Gaming-X-v1.0.0.apk`) trực tiếp từ mã nguồn.
+> **Language**: **English** | [Tiếng Việt](vi/development.md)
+
+## 1. Purpose
+Instructions for developers compiling the KernelSU Module ZIP, ARM64 Rust binaries (`kgx-core`, `libkgx_rust.so`), C++17 Zygisk library (`arm64-v8a.so`), and Companion Android APK (`KSU-Ultimate-Gaming-X-v1.0.0.apk`) directly from source.
 
 ---
 
-## 2. Yêu cầu môi trường thực tế
-Dựa theo [scripts/build_rust.py](../scripts/build_rust.py), [scripts/build_apk.py](../scripts/build_apk.py), [scripts/build_zip.py](../scripts/build_zip.py) và [tests/verify_all.py](../tests/verify_all.py):
+## 2. Verified Build Toolchain
+Derived from [scripts/build_rust.py](../scripts/build_rust.py), [scripts/build_apk.py](../scripts/build_apk.py), [scripts/build_zip.py](../scripts/build_zip.py), and [tests/verify_all.py](../tests/verify_all.py):
 
-| Thành phần | Yêu cầu đã kiểm chứng | Ghi chú |
+| Component | Verified Requirement | Notes |
 |---|---|---|
-| **Hệ điều hành** | Windows 10/11 *(full build + 7 stages)*; Linux (`ubuntu-latest`) *(build ZIP + Stages 1–6 CI)* | Scripts `build_rust.py` / `build_apk.py` mặc định đường dẫn Windows (hỗ trợ env override một phần SDK/Java) |
-| **Python** | Python 3.12+ | Không cần package pip ngoài (chỉ dùng thư viện chuẩn Python) |
-| **Rust toolchain** | `rustc` với target `aarch64-linux-android` | Zero external crates (thuần `std`) |
-| **Android NDK** | NDK `29.0.14206865` (`aarch64-linux-android29-clang`, `clang++`, `llvm-strip`) | Link C++ Zygisk với `-static-libstdc++ -llog -ldl` |
-| **Android SDK** | Platform `android-34` (`android.jar`) & Build-Tools `34.0.0` (`aapt2`, `d8`, `zipalign`, `apksigner`) | Hỗ trợ biến môi trường `ANDROID_SDK_ROOT` / `ANDROID_HOME` |
-| **Java JDK** | OpenJDK 17 (`javac`, `keytool`) | Compile target Java 8 |
-| **POSIX shell (để chạy test)** | Git for Windows `sh.exe` (hoặc `/bin/sh` + `awk` + `tar` trên Linux) | Không cần Gradle hay CMake để đóng gói APK |
-| **Dung lượng trống** | ~2 GB (tính cả Android SDK + NDK + Rust target) | Phần mã nguồn & artifact repo chỉ < 5 MB |
+| **Operating System** | Windows 10/11 *(full build + 7 stages)*; Linux `ubuntu-latest` *(ZIP build + CI Stages 1–6)* | `build_rust.py` / `build_apk.py` default to Windows paths (with SDK/Java env overrides) |
+| **Python** | Python 3.12+ | Standard library only (zero pip dependencies) |
+| **Rust Toolchain** | `rustc` with `aarch64-linux-android` target | Pure `std`, zero external crates |
+| **Android NDK** | NDK `29.0.14206865` (`aarch64-linux-android29-clang`, `clang++`, `llvm-strip`) | Links C++ Zygisk with `-static-libstdc++ -llog -ldl` |
+| **Android SDK** | Platform `android-34` (`android.jar`) & Build-Tools `34.0.0` (`aapt2`, `d8`, `zipalign`, `apksigner`) | Respects `ANDROID_SDK_ROOT` / `ANDROID_HOME` |
+| **Java JDK** | OpenJDK 17 (`javac`, `keytool`) | Compiles Java 8 bytecode (no Gradle/CMake required) |
+| **POSIX Shell (Tests)** | Git for Windows `sh.exe` (or `/bin/sh` + `awk` + `tar` on Linux) | Powers Stage 1–6 POSIX verification |
+| **Disk Space** | ~2 GB (including Android SDK + NDK + Rust toolchain) | Repository source + artifacts are < 5 MB |
 
 ---
 
-## 3. Các bước Build & Kiểm thử
+## 3. Build & Verification Steps
 
-### Bước 1: Clone mã nguồn
+### Step 1: Clone Repository
 ```sh
 git clone https://github.com/hangothanhh/ksu-ultimate-gaming-x.git
 cd ksu-ultimate-gaming-x
 ```
-*(Dự án không sử dụng Git submodule.)*
+*(No Git submodules are used.)*
 
-### Bước 2: Build nhị phân Rust & Zygisk (Windows với NDK + Rust đã cài)
+### Step 2: Compile Rust & Zygisk ARM64 Binaries (Windows with NDK + Rust)
 ```powershell
 python -u scripts/build_rust.py
 ```
-Lệnh này biên dịch lần lượt:
+Builds:
 1. `companion/rust-core/src/main.rs` → `module/bin/kgx-core` (AArch64 ELF)
-2. `companion/zygisk-spoof/src/main.cpp` → `module/zygisk/arm64-v8a.so` (Zygisk API v4 SO, không phụ thuộc `libc++_shared.so`)
+2. `companion/zygisk-spoof/src/main.cpp` → `module/zygisk/arm64-v8a.so` (Zygisk API v4 SO, no `libc++_shared.so` dependency)
 3. `companion/android-app/rust-jni/src/lib.rs` → `companion/android-app/jniLibs/arm64-v8a/libkgx_rust.so`
 
-### Bước 3: Build Display Helper DEX & Companion APK
-*(Tùy chọn ký bằng keystore riêng qua biến môi trường; nếu bỏ trống sẽ tạo debug keystore cục bộ tại `companion/android-app/kgx.keystore` — đã bị `.gitignore` bỏ qua, không commit lên Git):*
+### Step 3: Build Display Helper DEX & Companion APK
+*(Optionally sign with your own release keystore via environment variables; otherwise generates a local gitignored debug keystore at `companion/android-app/kgx.keystore`):*
 ```powershell
-# Tùy chọn nếu dùng keystore riêng của bạn:
+# Optional release signing overrides:
 # $env:KGX_KEYSTORE_PATH = "C:\path\to\your-release.keystore"
 # $env:KGX_KEYSTORE_PASS = "..."
 # $env:KGX_KEY_PASS = "..."
@@ -50,29 +52,29 @@ Lệnh này biên dịch lần lượt:
 
 python -u scripts/build_apk.py
 ```
-Kết quả:
+Outputs:
 - `module/data/kgx-display.dex`
 - `dist/KSU-Ultimate-Gaming-X-v1.0.0.apk` + `.sha256`
 
-### Bước 4: Đóng gói KernelSU Module ZIP (Windows hoặc Linux)
+### Step 4: Package Deterministic KernelSU Module ZIP (Windows or Linux)
 ```sh
 python3 -u scripts/build_zip.py
 ```
-Kết quả:
+Outputs:
 - `dist/KSU-Ultimate-Gaming-X-v1.0.0.zip` + `.sha256`
-- Tự chuẩn hóa ký tự xuống dòng LF (`\n`), xóa UTF-8 BOM, gán quyền UNIX `0755` cho script/binary và `0644` cho file dữ liệu/SO, cấm tuyệt đối `module/system.prop` hay `module/webroot`.
+- Enforces LF (`\n`), strips UTF-8 BOM, applies UNIX permissions (`0755` scripts/binaries, `0644` data/SO), and forbids `module/system.prop` or `module/webroot`.
 
-### Bước 5: Chạy bộ kiểm thử toàn diện
-- **Chạy đủ cả 7 stage (cần có cả APK trong `dist/`)**:
+### Step 5: Run Verification Suite
+- **Full 7-stage suite (requires built APK in `dist/`)**:
   ```powershell
   python -u tests/verify_all.py
   ```
-- **Chạy Stages 1–6 (trên Linux CI hoặc khi chỉ test Module ZIP)**:
+- **Stages 1–6 (Linux CI or Module ZIP only)**:
   ```sh
   python3 -u tests/verify_all.py --skip-apk
   ```
 
-### Bước 6: Kiểm tra kết quả & SHA-256
+### Step 6: Inspect Output Checksums (SHA-256)
 - **Windows (PowerShell)**:
   ```powershell
   Get-FileHash dist\KSU-Ultimate-Gaming-X-v1.0.0.zip, dist\KSU-Ultimate-Gaming-X-v1.0.0.apk -Algorithm SHA256
@@ -84,5 +86,5 @@ Kết quả:
 
 ---
 
-## 4. Lưu ý cho người muốn sửa `build_rust.py` / `build_apk.py` trên Linux
-Hiện tại các hằng số đường dẫn NDK/SDK/JDK mặc định trong `build_rust.py` (`.cmd` / `.exe`) và `build_apk.py` (`build-tools/34.0.0/*.bat`) được viết cho môi trường Windows host của maintainer. Nếu bạn muốn cross-compile Rust/APK trên Linux, cần điều chỉnh tên binary toolchain bỏ đuôi `.cmd`/`.bat`/`.exe` hoặc dùng trực tiếp GitHub Actions chỉ đóng gói ZIP & kiểm thử POSIX (`--skip-apk`).
+## 4. Note for Linux Cross-Compilation
+Default NDK/SDK/JDK paths inside `build_rust.py` (`.cmd`/`.exe`) and `build_apk.py` (`*.bat`/`.exe`) target the maintainer's Windows host. On Linux, adjust tool binary names without `.cmd`/`.bat`/`.exe` extensions, or rely on GitHub Actions CI for Module ZIP packaging and Stages 1–6 (`--skip-apk`).

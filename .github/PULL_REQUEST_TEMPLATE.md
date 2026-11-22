@@ -1,22 +1,23 @@
-## Mô tả thay đổi
-- Thay đổi cái gì?
-- Lý do cần thay đổi?
+## Summary of Changes
+- What changed?
+- Why is this change needed?
 
-## Danh sách file bị sửa
+## Modified Files
 - ...
 
-## Kiểm thử đã thực hiện
-- [ ] `python -u tests/verify_all.py` (hoặc `--skip-apk` trên Linux) PASS 100%
-- [ ] `python -u scripts/build_zip.py` đóng gói sạch, không lỗi LF/CRLF
-- [ ] Kiểm thử trên thiết bị thật (ghi rõ model, Android, KernelSU nếu có; nếu chỉ test mock hãy ghi rõ):
+## Verification Performed
+- [ ] `python -u tests/verify_all.py` (or `--skip-apk` on Linux) passes 100%
+- [ ] `python -u scripts/build_zip.py` packages cleanly with LF line endings
+- [ ] Physical device testing (specify model, Android, KernelSU if tested; if mock-only, state so clearly):
 
-## Tác động tương thích & khả năng rollback
-- Thay đổi có ảnh hưởng `global.conf`, `orig_*.env`, `system.prop` hoặc `zygisk/arm64-v8a.so` không?
-- Khi bật `SAFE_MODE=1` hoặc gỡ module có hoàn nguyên sạch không?
+## Compatibility, License & Rollback Impact
+- I agree that contributions in this Pull Request are licensed under **GNU GPL v3.0 or later (`GPL-3.0-or-later`)**
+- Does this touch `global.conf`, `orig_*.env`, `system.prop`, or `zygisk/arm64-v8a.so`?
+- Does toggling `SAFE_MODE=1` or uninstalling the module restore stock state cleanly?
 
-## Minh bạch về AI & Chống "AI Slop" (Bắt buộc)
-- [ ] Tôi xác nhận không dán code AI tạo hàng loạt ("AI slop") mà chưa đọc hiểu, chưa tự rà lỗi POSIX/nhớ/sysfs hoặc bịa đặt khả năng tương thích thiết bị.
-- Mức độ hỗ trợ của AI trong PR này (nếu có):
-  - [ ] Không dùng AI
-  - [ ] Có dùng AI hỗ trợ — đã đọc lại toàn bộ diff và chạy test xác minh
-- Những phần nào CHỈ mới chạy mock hoặc chưa test được trên máy thật?
+## AI Transparency & Anti-"AI Slop" Checklist (Required)
+- [ ] I confirm this PR does NOT contain unreviewed bulk AI-generated code ("AI slop"), unverified `sysfs`/prop tweaks, or fabricated device compatibility claims.
+- AI involvement level:
+  - [ ] No AI used
+  - [ ] AI-assisted — I personally reviewed every line of the diff and ran all tests
+- Which parts were ONLY mock-tested or remain untested on real hardware?

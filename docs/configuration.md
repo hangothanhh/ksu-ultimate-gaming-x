@@ -1,74 +1,76 @@
-# Cấu hình & Tùy chọn (Configuration)
+# Configuration & Options (`global.conf`)
 
-## 1. Mục đích
-Giải thích toàn bộ các khóa cấu hình trong `/data/adb/ksu_gaming_x/config/global.conf` (khởi tạo từ [default_global.conf](../module/data/default_global.conf)) và các tệp danh sách đi kèm để người mới hiểu rõ từng công tắc làm gì trước khi thay đổi.
+> **Language**: **English** | [Tiếng Việt](vi/configuration.md)
 
----
-
-## 2. Đường dẫn file cấu hình trên máy
-Khi module hoạt động trên Android, toàn bộ dữ liệu bền vững (không mất khi nâng cấp ZIP) được lưu tại `/data/adb/ksu_gaming_x/`:
-- `config/global.conf` — Cấu hình toàn cục (được Companion App chỉnh qua `kgxctl engine set <KEY> <VALUE>`).
-- `config/custom_games.tsv` — Danh sách game do người dùng tùy biến (10 cột phân tách bằng tab).
-- `config/spoof_denylist.list` — Danh sách package ứng dụng **không bị spoof** (bởi Zygisk Shield).
-- `config/freezer_apps.list` — Danh sách package được phép đóng băng nền khi chơi game (`FREEZER_ENABLED=1`).
-- `profiles/custom_profiles.tsv` — Hồ sơ thiết bị spoof tự tạo.
+## 1. Purpose
+Explains every configuration key in `/data/adb/ksu_gaming_x/config/global.conf` (initialized from [default_global.conf](../module/data/default_global.conf)) and companion list files so beginners understand each toggle before modifying it.
 
 ---
 
-## 3. Bảng thông số `global.conf`
+## 2. Persistent On-Device Paths
+While active on Android, persistent module data (preserved across ZIP upgrades) lives under `/data/adb/ksu_gaming_x/`:
+- `config/global.conf` — Global configuration (modified safely by the Companion App via `kgxctl engine set <KEY> <VALUE>`).
+- `config/custom_games.tsv` — User-customized per-game profiles (10 tab-separated columns).
+- `config/spoof_denylist.list` — Package names **excluded from spoofing** (restored to stock by Zygisk Shield).
+- `config/freezer_apps.list` — Background packages eligible for `cgroup.freeze` v2 while gaming (`FREEZER_ENABLED=1`).
+- `profiles/custom_profiles.tsv` — Custom user-created device spoof profiles.
 
-| Khóa | Mặc định | Ý nghĩa | Cảnh báo / Lưu ý |
+---
+
+## 3. `global.conf` Key Reference
+
+| Key | Default | Meaning | Notes / Warnings |
 |---|---|---|---|
-| `AUTO_OPTIMIZE` | `1` | Tự nhận diện game foreground qua daemon `kgx-core` | Tắt (`0`) để dừng tự động áp profile khi mở game |
-| `SAFE_MODE` | `0` | Chế độ an toàn khẩn cấp | Nếu bật `1`, module hoàn nguyên mọi thông số gốc và không chạy daemon |
-| `SPOOF_ENABLED` | `1` | Bật/tắt toàn bộ cơ chế spoof tên máy | Tác dụng toàn hệ thống trừ gói được bảo vệ bởi Zygisk Shield |
-| `PLAY_INTEGRITY_SHIELD` | `1` | Zygisk hoàn nguyên prop gốc cho GMS/Play Store/GSF/Wallet | Cần Zygisk/ReZygisk hoạt động |
-| `SPOOF_EXCLUDE_SETTINGS` | `1` | Không spoof ứng dụng Cài đặt Android/Samsung/OEM | Giúp Cài đặt hiển thị đúng thông tin gốc |
-| `GLOBAL_SPOOF_PROFILE` | `realme_14_5g` | ID thiết bị spoof mặc định từ `devices.tsv` hoặc `custom_profiles.tsv` | Cần có Zygisk hoặc `resetprop` |
-| `DEFAULT_MODE` | `high_performance` | Chế độ hiệu năng mặc định (`balanced`, `high_performance`, `extreme_gaming`, `battery_gaming`) | Không áp `extreme_gaming` nếu máy nóng sẵn |
-| `FPS_ENGINE_ENABLED` | `1` | Bật chỉnh GameManager (`cmd game` / `device_config game_overlay`) | Chỉ áp khi process game **chưa chạy** để tránh `killUid` |
-| `DISPLAY_AUTO_HZ` | `1` | Tự động chỉnh `min/peak_refresh_rate` theo cấu hình game | Có guard chống kẹt 60Hz và chuẩn hóa `120.1 -> 120.0` |
-| `TOUCH_OPT_ENABLED` | `1` | Tối ưu node cảm ứng khi vào game (nếu node tồn tại) | Hoàn nguyên qua `sysfs_restore_all` khi thoát game |
-| `RAM_OPT_ENABLED` | `1` | Cân chỉnh `swappiness` / `vfs_cache_pressure` & dọn nền có chọn lọc | Tuyệt đối không chạy `am kill-all` |
-| `THERMAL_GUARD_ENABLED` | `1` | Bảo vệ nhiệt độ tự động (NORMAL → WARM → HOT → CRITICAL) | Nên giữ `1` để tránh tắt nguồn vì nóng |
-| `THERMAL_UNLOCK` | `0` | Nâng trần xung nhiệt (`EXYNOS_UFCC` / devfreq GPU) *(EXPERIMENTAL trên máy mới)* | Chỉ bật khi tản nhiệt tốt; **không** sửa `trip_point_*` |
-| `SUSTAINED_SWEET_SPOT` | `0` | Khóa trần xung ổn định (~82% peak trên Exynos) thay vì bung 100% gây tụt FPS sớm | Phù hợp chơi dài trên Exynos 2200 |
-| `MAX_CLOCK_LOCK` | `0` | Giữ tần số min/max cao hơn theo bảng trong `cpu_gpu.sh` | Tốn pin và nóng nhanh hơn |
-| `SOFT_THERMAL_STEP` | `0` | Hạ bậc xung mềm theo ngưỡng nhiệt trước khi lag nặng | Chỉ áp khi đang trong phiên game |
-| `GOS_NEUTRALIZE` | `0` | Vô hiệu hóa tạm thời `com.samsung.android.game.gos` (`pm disable-user`) | Tự bật lại khi tắt tùy chọn hoặc bật `SAFE_MODE=1` |
-| `EXT_DISPLAY_SCREEN_OFF` | `0` | Tự tắt chỉ màn hình điện thoại khi cắm màn hình ngoài | Có safety guard **cấm tắt** nếu không phát hiện màn hình ngoài |
-| `RES_OVERRIDE_ENABLED` | `0` | Đổi độ phân giải hệ thống (`wm size` / `wm density`) | Tự reset khi ngắt điều kiện |
-| `RES_OVERRIDE_SCOPE` | `ext_scrcpy` | Phạm vi áp dụng độ phân giải: `ext_scrcpy` hoặc `always` | `always` đổi độ phân giải liên tục ngay cả khi rút cáp |
-| `RES_OVERRIDE_PRESET` | `1080x1920` | Độ phân giải đích cho `RES_OVERRIDE_ENABLED` | Hỗ trợ các ngưỡng `480..3840` hợp lệ |
-| `RES_OVERRIDE_DENSITY` | `auto` | DPI khi đổi độ phân giải (`auto` hoặc số nguyên 240–640) | Tự tính tỉ lệ theo chiều rộng gốc |
-| `FREEZER_ENABLED` | `0` | Đóng băng các app trong `freezer_apps.list` qua `cgroup.freeze` v2 | Không đóng băng app đang mở ở View/Samsung DeX |
-| `THERMAL_ALERT_ENABLED` | `1` | Bật cảnh báo nhiệt độ trong overlay / trạng thái | — |
-| `THERMAL_ALERT_BATT_C` | `44` | Ngưỡng cảnh báo nhiệt pin (°C) | — |
-| `THERMAL_ALERT_CPU_C` | `92` | Ngưỡng cảnh báo nhiệt CPU (°C) | — |
-| `THERMAL_ALERT_ACTION` | `notify` | Hành động khi vượt ngưỡng (`notify`, `step_down`, `bypass`, `both`) | — |
-| `BYPASS_CHARGING` | `0` | Chuyển dòng sạc nuôi máy trực tiếp qua `batt_slate_mode`/`input_suspend`/`charging_enabled` | Yêu cầu kernel có node tương ứng |
-| `BYPASS_MIN_PCT` | `80` | Mức pin tối thiểu để bật Bypass Charging (hysteresis -3%) | Tránh tụt sạch pin khi vừa sạc vừa chơi |
-| `POLL_INTERVAL_ACTIVE` | `2` | Chu kỳ quét (giây) khi đang trong game | Từ 1–30s |
-| `POLL_INTERVAL_IDLE` | `1` | Chu kỳ quét (giây) khi ngoài game | Từ 1–30s |
-| `EXIT_DEBOUNCE_SEC` | `2` | Thời gian chờ (giây) sau khi rời game mới hoàn nguyên | Tránh giật cấu hình khi lỡ chạm ra ngoài 1 giây |
-| `KEEP_BACKUPS_ON_UNINSTALL` | `0` | Nếu `1`, giữ thư mục `backups/` khi gỡ module | Xóa các mục còn lại của `ksu_gaming_x` |
+| `AUTO_OPTIMIZE` | `1` | Auto-detect foreground games via `kgx-core` | Set `0` to disable automatic per-game tuning |
+| `SAFE_MODE` | `0` | Emergency Safe Mode | Setting `1` restores stock settings immediately and stops daemon |
+| `SPOOF_ENABLED` | `1` | Master device spoof switch | Applies system-wide except packages protected by Zygisk Shield |
+| `PLAY_INTEGRITY_SHIELD` | `1` | Zygisk restores stock props for GMS/Play Store/GSF/Wallet | Requires active ReZygisk/Zygisk Next |
+| `SPOOF_EXCLUDE_SETTINGS` | `1` | Keeps real device identity inside Android/Samsung/OEM Settings | Keeps About Phone accurate |
+| `GLOBAL_SPOOF_PROFILE` | `realme_14_5g` | Default spoof profile ID from `devices.tsv` or `custom_profiles.tsv` | Requires Zygisk or `resetprop` |
+| `DEFAULT_MODE` | `high_performance` | Default performance mode (`balanced`, `high_performance`, `extreme_gaming`, `battery_gaming`) | Avoid `extreme_gaming` when device is already hot |
+| `FPS_ENGINE_ENABLED` | `1` | Enables GameManager pre-configuration (`cmd game` / `device_config game_overlay`) | Only writes while the game process is **not running** to prevent `killUid` |
+| `DISPLAY_AUTO_HZ` | `1` | Auto-manages `min/peak_refresh_rate` per game | Includes anti-60Hz guard & `120.1 -> 120.0` sanitizer |
+| `TOUCH_OPT_ENABLED` | `1` | Tunes touch game sysfs node during active sessions (if supported) | Reverted via `sysfs_restore_all` on exit |
+| `RAM_OPT_ENABLED` | `1` | Adjusts `swappiness` / `vfs_cache_pressure` & selective background trim | Strictly never runs `am kill-all` |
+| `THERMAL_GUARD_ENABLED` | `1` | Automatic 4-stage thermal protection (NORMAL → WARM → HOT → CRITICAL) | Recommended ON to prevent overheating shutdowns |
+| `THERMAL_UNLOCK` | `0` | Relaxes software limits (`EXYNOS_UFCC` / GPU devfreq) *(EXPERIMENTAL on untested SoCs)* | Requires adequate cooling; **never** modifies `trip_point_*` |
+| `SUSTAINED_SWEET_SPOT` | `0` | Caps peak clocks (~82% peak on Exynos) for sustained thermals instead of early throttling | Recommended for long Exynos 2200 sessions |
+| `MAX_CLOCK_LOCK` | `0` | Holds higher min/max clocks per `cpu_gpu.sh` tables | Increases battery drain and heat |
+| `SOFT_THERMAL_STEP` | `0` | Two-tier soft clock step-down before severe lag hits | Applies only during active game sessions |
+| `GOS_NEUTRALIZE` | `0` | Temporarily disables `com.samsung.android.game.gos` (`pm disable-user`) | Auto-re-enabled when toggled off or in `SAFE_MODE=1` |
+| `EXT_DISPLAY_SCREEN_OFF` | `0` | Turns off internal phone panel only while external HDMI/DP display is active | Safety guard **refuses** screen-off if no external display is detected |
+| `RES_OVERRIDE_ENABLED` | `0` | Overrides screen resolution (`wm size` / `wm density`) | Auto-resets when conditions end |
+| `RES_OVERRIDE_SCOPE` | `ext_scrcpy` | Resolution override scope: `ext_scrcpy` or `always` | `always` applies resolution continuously even unplugged |
+| `RES_OVERRIDE_PRESET` | `1080x1920` | Target resolution for `RES_OVERRIDE_ENABLED` | Valid range `480..3840` |
+| `RES_OVERRIDE_DENSITY` | `auto` | Target DPI (`auto` or integer `240–640`) | Scales proportionally from stock width |
+| `FREEZER_ENABLED` | `0` | Freezes listed apps via `cgroup.freeze` v2 | Skips apps visible in Pop-up View or Samsung DeX |
+| `THERMAL_ALERT_ENABLED` | `1` | Enables temperature warnings in overlay / status | — |
+| `THERMAL_ALERT_BATT_C` | `44` | Battery temperature alert threshold (°C) | — |
+| `THERMAL_ALERT_CPU_C` | `92` | CPU temperature alert threshold (°C) | — |
+| `THERMAL_ALERT_ACTION` | `notify` | Threshold action (`notify`, `step_down`, `bypass`, `both`) | — |
+| `BYPASS_CHARGING` | `0` | Routes charger power directly to board (`batt_slate_mode`/`input_suspend`/`charging_enabled`) | Requires supported kernel node |
+| `BYPASS_MIN_PCT` | `80` | Minimum battery percentage for Bypass Charging (`-3%` hysteresis) | Prevents deep battery drain while plugged in |
+| `POLL_INTERVAL_ACTIVE` | `2` | Active session poll interval (seconds) | `1–30s` |
+| `POLL_INTERVAL_IDLE` | `1` | Idle poll interval (seconds) | `1–30s` |
+| `EXIT_DEBOUNCE_SEC` | `2` | Grace delay (seconds) after leaving foreground before restoring | Avoids flicker during quick app switches |
+| `KEEP_BACKUPS_ON_UNINSTALL` | `0` | If `1`, preserves `backups/` when uninstalling module | Deletes all other `ksu_gaming_x` files |
 
 ---
 
-## 4. Cách chỉnh cấu hình an toàn
-- **Cách dễ nhất (khuyên dùng)**: Chỉnh bằng các công tắc/menu trong ứng dụng **KSU Gaming X APK**.
-- **Cách qua dòng lệnh (`kgxctl`)**:
+## 4. Safe Configuration Editing
+- **Recommended**: Use toggles and dialogs in the **KSU Gaming X APK**.
+- **Via CLI (`kgxctl`)**:
   ```sh
   su -c "/data/adb/modules/ksu_ultimate_gaming_x/bin/kgxctl engine get"
   su -c "/data/adb/modules/ksu_ultimate_gaming_x/bin/kgxctl engine set SPOOF_EXCLUDE_SETTINGS 1"
   ```
-- **Cách sao lưu trước khi thử nghiệm**:
+- **Back up before experimenting**:
   ```sh
-  su -c "/data/adb/modules/ksu_ultimate_gaming_x/bin/kgxctl backup create truoc_khi_thu"
+  su -c "/data/adb/modules/ksu_ultimate_gaming_x/bin/kgxctl backup create before_test"
   ```
 
 ---
 
-## 5. Cảnh báo & Lỗi thường gặp
-- **Không tự sửa tay `orig_display.env` hay `orig_props.tsv`**: Đây là ảnh chụp trạng thái gốc dùng để hoàn nguyên. Sửa sai sẽ khiến module khôi phục nhầm giá trị.
-- **Nếu cấu hình lỗi làm nóng máy hoặc lag**: Bật `SAFE_MODE=1` trên app hoặc bấm nút **Action** trong KernelSU Manager để `rollback` ngay lập tức.
+## 5. Warnings & Common Mistakes
+- **Never hand-edit `orig_display.env` or `orig_props.tsv`**: These capture stock snapshots for restoration; corrupting them causes wrong restores.
+- **If settings cause lag or heat**: Toggle `SAFE_MODE=1` in the app or tap **Action** in KernelSU Manager for immediate rollback.

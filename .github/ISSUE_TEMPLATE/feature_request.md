@@ -1,21 +1,21 @@
 ---
-name: Đề xuất tính năng (Feature Request)
-about: Đề xuất cải tiến hoặc bổ sung hỗ trợ mới cho KSU Ultimate Gaming X
+name: Feature Request
+about: Propose a new feature or improvement for KSU Ultimate Gaming X (English preferred; Vietnamese also welcome)
 title: "[Feature] "
 labels: enhancement
 assignees: ''
 ---
 
-## 1. Tính năng bạn muốn đề xuất
-Mô tả rõ ràng vấn đề bạn gặp phải và giải pháp mong muốn.
+## 1. Proposed Feature
+Clearly describe the problem you want to solve and the proposed behavior.
 
-## 2. Phạm vi & ảnh hưởng hệ thống
+## 2. Scope & Affected Subsystems
 - [ ] Module shell scripts (`module/lib/*.sh`)
 - [ ] Rust daemon / CLI (`companion/rust-core/`)
 - [ ] Zygisk Stock-Identity Shield (`companion/zygisk-spoof/`)
 - [ ] Companion Android APK (`companion/android-app/`)
-- [ ] Tài liệu / Cơ sở dữ liệu game hoặc thiết bị
+- [ ] Documentation / Device or Game database
 
-## 3. Tiêu chí an toàn
-- Tính năng có sửa property hệ thống / sysfs mới không? Nếu có, cách rollback khi gỡ module hoặc bật `SAFE_MODE=1` là gì?
-- Nếu ý tưởng tham khảo/nhờ AI viết gợi ý, hãy ghi rõ phần nào mới là giả thuyết chưa kiểm chứng trên máy thật.
+## 3. Safety & Rollback Criteria
+- Does this add new system property or `sysfs` writes? If yes, how does `SAFE_MODE=1` or `uninstall.sh` revert them cleanly?
+- If any part of the proposal came from AI assistance, clearly mark what is still an untested hypothesis vs hardware-verified behavior.

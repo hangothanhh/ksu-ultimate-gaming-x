@@ -1,56 +1,58 @@
 # FPS Compatibility Engine & LTPO 120Hz Refresh-Rate Guard
 
-## 1. Mục đích
-Giải thích vì sao không phải lúc nào spoof tên máy cũng mở khóa được 90/120 FPS trong game, cơ chế phân tích 5 yếu tố của module (`fps.sh`), cách chống crash `PlatformCompat killUid` khi chỉnh `GameManager`, và cách bộ bảo vệ 120Hz (`display.sh` + `hw_detect.sh`) ngăn tụt/kẹt 60Hz.
+> **Language**: **English** | [Tiếng Việt](vi/fps-compatibility.md)
+
+## 1. Purpose
+Explains why device spoofing alone cannot unlock 90/120 FPS in every title, how the 5-factor compatibility analyzer (`fps.sh`) works, how `PlatformCompat killUid` crashes are avoided when configuring `GameManager`, and how `display.sh` + `hw_detect.sh` prevent 60Hz drops and post-reboot 60Hz locks.
 
 ---
 
-## 2. Động cơ phân tích FPS 5 yếu tố (`fps_analyze_json`)
-Module **không hứa hẹn viển vông** rằng mọi game đều lên 120 FPS. Khi bạn chọn game, `kgxctl games get <pkg>` và app sẽ tính trần FPS thật sự dựa trên đúng **5 giới hạn**:
+## 2. 5-Factor FPS Compatibility Engine (`fps_analyze_json`)
+This module **makes zero unrealistic promises** that every game will run at 120 FPS. When evaluating a game, `kgxctl games get <pkg>` calculates the true ceiling from **5 factors**:
 
 $$\text{Effective FPS} = \min(\text{Requested FPS},\ \text{Game Engine Cap},\ \text{Display Max Hz},\ \text{Thermal Cap})$$
 
-| Bộ giới hạn (`primary_limiter`) | Ý nghĩa thực tế |
+| Limiter (`primary_limiter`) | Real-World Meaning |
 |---|---|
-| `THERMAL_LIMIT` | Nhiệt độ máy đang ở mức `HOT` (giới hạn 90 FPS) hoặc `CRITICAL` (giới hạn 60 FPS) |
-| `DISPLAY_LIMIT` | Tần số quét tối đa của màn hình nhỏ hơn FPS yêu cầu (VD màn 60Hz không thể hiển thị 120 FPS) |
-| `GAME_LIMIT` | Bản thân engine của game khóa cứng trên Android (VD *Genshin Impact* khóa `GAME_CAP 60 FPS`, spoof máy khác cũng không vượt được trần Android trừ khi dùng mod game — mà module **không** làm) |
-| `WHITELIST_LIMIT` | Game khóa 90/120 FPS theo whitelist thiết bị (`WHITELIST`), nhưng Spoof đang tắt hoặc chưa khớp |
-| `HARDWARE_LIMIT` | Game cho phép mở nhưng SoC/GPU xếp hạng (`HW_TIER`) có thể không giữ vững đều mức FPS đó khi tải nặng |
+| `THERMAL_LIMIT` | Device temperature is `HOT` (caps target at 90 FPS) or `CRITICAL` (caps at 60 FPS) |
+| `DISPLAY_LIMIT` | Physical display max Hz is lower than requested FPS (e.g., 60Hz panel cannot render 120 FPS) |
+| `GAME_LIMIT` | Game engine enforces a hard Android cap (e.g., *Genshin Impact* caps Android at `GAME_CAP 60 FPS`; spoofing cannot bypass it without modifying game binaries, which this module **never** does) |
+| `WHITELIST_LIMIT` | Game gates 90/120 FPS behind an official device whitelist (`WHITELIST`), and Spoof is off or unmatched |
+| `HARDWARE_LIMIT` | Game allows high FPS, but the SoC/GPU `HW_TIER` may not sustain that target under heavy load |
 
 ---
 
-## 3. Bảo vệ chống văng game (`PlatformCompat killUid` trên Android 12+)
-Trên Android 12+, gọi `cmd game mode/downscale` hoặc `device_config put game_overlay` **trong lúc game đang chạy** sẽ kích hoạt `PlatformCompat.putOverridesOnReleaseBuilds()` gọi thẳng `killUid()`, làm game văng lập tức.
-Cách module xử lý trong [module/lib/fps.sh](../module/lib/fps.sh):
-- Cấu hình `GameManager` / `downscale` được **pre-apply trước khi game chạy** (lúc bạn lưu cấu hình game hoặc khi khởi động `service.sh`).
-- Khi phát hiện game đang chạy (`fps_is_pkg_running`), `fps_apply` và `session_deactivate` **tuyệt đối không** gọi `cmd game` hay `device_config` (chỉ dọn `gamemgr_applied.tsv` khi thật sự tắt/rollback qua `Safemode` hoặc `games clear`/lúc game không chạy).
+## 3. Crash Protection (`PlatformCompat killUid` on Android 12+)
+On Android 12+, invoking `cmd game mode/downscale` or `device_config put game_overlay` **while the game process is running** triggers `PlatformCompat.putOverridesOnReleaseBuilds()`, calling `killUid()` and crashing the game instantly.
+How [module/lib/fps.sh](../module/lib/fps.sh) avoids this:
+- `GameManager` / `downscale` overrides are **pre-applied only while the game is not running** (when saving config in the app or during `service.sh` startup).
+- Whenever `fps_is_pkg_running` detects a running game, `fps_apply` and `session_deactivate` **never** call `cmd game` or `device_config`.
 
 ---
 
-## 4. Bộ bảo vệ 120Hz LTPO & Khôi phục sau Reboot (`hw_detect.sh` + `display.sh`)
-Trên máy Samsung LTPO 10–120Hz (đã kiểm chứng thực tế trên Galaxy S22 Exynos One UI 4.1), module xử lý 4 lỗi phổ biến:
-1. **Cô lập màn hình chính khỏi HDMI / Desktop DeX**: Chỉ lấy `supportedModes` của dòng `DisplayDeviceInfo{` có `type INTERNAL` / `FLAG_DEFAULT_DISPLAY`, không bị trộn tần số 50/70/75Hz của màn hình ngoài.
-2. **Tránh lỗi tràn đối số `mksh` (`Argument list too long`)**: Xuất output `dumpsys display` và `dumpsys SurfaceFlinger` ra file tạm rồi xử lý bằng `awk`, có fallback kernel `/sys/class/drm/*DSI*/modes` và `/sys/class/lcd/panel/vrr`.
-3. **Không bao giờ hạ cấp `hw_profile.env`**: Nếu đã nhận `DISPLAY_MAX_HZ > 60` mà lần quét mới rỗng/lỗi, vẫn giữ nguyên profile `>60Hz` cũ và ghi log cảnh báo; nếu lỡ dính `60`, `hw_load()` và `kgx-core` tự quét lại một lần khi `sys.boot_completed=1`.
-4. **Chuẩn hóa bẫy `120.1` của SamHelper & bật Seamless 120Hz**:
-   - SamHelper thường ghi `120.1`, lớn hơn mode panel thật `120.00001 Hz` khiến `DisplayModeDirector` từ chối và hạ về 60Hz. `display_sanitize_hz_val()` tự chuẩn hóa `120.1 -> 120.0`.
-   - Khi `chosen >= 90`, module luôn bật `secure refresh_rate_mode 1` (và `system refresh_rate_mode 1` nếu có).
-   - Khi máy tắt đột ngột/soft-reboot lúc còn `active_display.env`, `service.sh` gọi `display_recover_on_boot` **trước** khi dọn state và `kgx-core` gọi `call_kgxctl_cleanup()` khi nhận `SIGTERM`/`SIGINT`/`SIGHUP`.
+## 4. LTPO 120Hz Guard & Reboot Recovery (`hw_detect.sh` + `display.sh`)
+Verified on Samsung 10–120Hz LTPO panels (Galaxy S22 Exynos, One UI 4.1), four common failure modes are handled:
+1. **Primary Display Isolation from HDMI / Desktop DeX**: Parses `supportedModes` strictly from `DisplayDeviceInfo{` lines marked `type INTERNAL` / `FLAG_DEFAULT_DISPLAY`, ignoring external 50/70/75Hz modes.
+2. **Preventing `mksh` `Argument list too long`**: Writes `dumpsys display` and `dumpsys SurfaceFlinger` output to temporary files processed with `awk`, plus kernel fallbacks (`/sys/class/drm/*DSI*/modes`, `/sys/class/lcd/panel/vrr`).
+3. **Downgrade Guard for `hw_profile.env`**: Never overwrites a previously detected `DISPLAY_MAX_HZ > 60` with `60`; if stuck at `60`, `hw_load()` and `kgx-core` auto-rescan once after `sys.boot_completed=1`.
+4. **SamHelper `120.1` Trap & Seamless 120Hz Enforcement**:
+   - Tools like SamHelper often write `120.1`, slightly exceeding Samsung's real `120.00001 Hz` panel mode and causing `DisplayModeDirector` to drop to 60Hz. `display_sanitize_hz_val()` normalizes `120.1 -> 120.0`.
+   - When `chosen >= 90`, `secure refresh_rate_mode 1` (and `system refresh_rate_mode 1` if present) is always enabled.
+   - If a crash or soft-reboot leaves `active_display.env` behind, `service.sh` executes `display_recover_on_boot` before clearing state, and `kgx-core` calls `call_kgxctl_cleanup()` on `SIGTERM`/`SIGINT`/`SIGHUP`.
 
 ---
 
-## 5. Giới hạn thực tế khi dùng Samsung DeX
-Khi chạy game bên trong cửa sổ **Samsung DeX (`Display #2`)**, game hỏi Android API tần số quét của chính màn hình mà nó đang hiển thị (`Display #2`), **không phải** màn hình điện thoại (`Display #0`).
-- Nếu màn hình HDMI gắn ngoài chỉ hỗ trợ tối đa 60Hz hoặc 75Hz (`Display #2` báo `75.0 Hz`), các game như *Delta Force Mobile* sẽ **tự làm mờ nút 90/120 FPS** dù Spoof đã nhận đúng `V2425A`.
-- **Cách xử lý hiện tại**: Mở game trực tiếp trên màn hình điện thoại (`Display #0` — 120Hz).
+## 5. Samsung DeX External Display Limit
+When running a game inside a **Samsung DeX (`Display #2`)** window, Android reports the refresh rate of `Display #2`, **not** the internal phone panel (`Display #0`).
+- If your HDMI monitor only supports 60Hz or 75Hz (`Display #2` reports `75.0 Hz`), games such as *Delta Force Mobile* will grey out 90/120 FPS even with an active `V2425A` spoof.
+- **Workaround**: Launch high-FPS games directly on the internal phone screen (`Display #0` — 120Hz).
 
 ---
 
-## 6. Kiểm tra nhanh bằng dòng lệnh
+## 6. CLI Diagnostic Commands
 ```sh
 su -c "/data/adb/modules/ksu_ultimate_gaming_x/bin/kgxctl hw"
 su -c "settings get system min_refresh_rate; settings get system peak_refresh_rate; settings get secure refresh_rate_mode"
 su -c "dumpsys display | grep -E 'mDisplayModeSpecs=|baseModeId=' | head -n 5"
 ```
-Trạng thái khỏe mạnh trên S22: `min=120.0`, `peak=120.0`, `sec_rrm=1`, `baseModeId=1`, `DISPLAY_SUPPORTED_HZ='30 48 60 96 120'`.
+Healthy Galaxy S22 output: `min=120.0`, `peak=120.0`, `sec_rrm=1`, `baseModeId=1`, `DISPLAY_SUPPORTED_HZ='30 48 60 96 120'`.

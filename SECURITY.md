@@ -1,5 +1,7 @@
 # Security Policy & Safety Boundaries
 
+> **Language**: **English** | [Tiếng Việt](docs/vi/SECURITY.md)
+
 ## Supported Versions
 
 | Version | Status | Notes |

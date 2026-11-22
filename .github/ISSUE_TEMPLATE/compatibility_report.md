@@ -1,32 +1,32 @@
 ---
-name: Báo cáo tương thích thiết bị (Compatibility Report)
-about: Chia sẻ kết quả kiểm thử thực tế trên thiết bị của bạn (giúp cập nhật bảng tương thích trung thực)
+name: Device Compatibility Report
+about: Share real-world physical device test results to keep our compatibility matrix honest (English preferred; Vietnamese also welcome)
 title: "[Compat] "
 labels: compatibility
 assignees: ''
 ---
 
-## 1. Thông tin máy kiểm thử
-- **Hãng / Model / Codename**:
+## 1. Tested Device Information
+- **Brand / Model / Codename**:
 - **SoC / GPU**:
 - **Android / ROM**:
-- **Kernel version (`uname -r`)**:
-- **KernelSU + Zygisk provider**:
-- **Phiên bản KSU Ultimate Gaming X**: `v1.0.0`
+- **Kernel Version (`uname -r`)**:
+- **KernelSU + Zygisk Provider**:
+- **KSU Ultimate Gaming X Version**: `v1.0.0`
 
-## 2. Trạng thái từng tính năng (Chỉ chọn mục bạn ĐÃ TỰ TEST)
-| Tính năng | Trạng thái (`VERIFIED` / `PARTIAL` / `BROKEN`) | Ghi chú |
+## 2. Feature Verification Status (Check ONLY what you personally tested)
+| Feature | Status (`VERIFIED` / `PARTIAL` / `BROKEN`) | Notes |
 |---|---|---|
-| Cài đặt Module ZIP & khởi động | | |
-| Companion APK kết nối root | | |
+| Module ZIP flash & clean boot | | |
+| Companion APK root connection | | |
 | `kgx-core` daemon & Scene FPS Overlay | | |
-| Device Spoof toàn hệ thống | | |
+| Whole-system Device Spoof | | |
 | Zygisk Stock-Identity Shield & Denylist | | |
-| Giữ / khôi phục 120Hz (hoặc max Hz) | | |
+| 120Hz / Max Refresh Rate retention & recovery | | |
 | Thermal Guard / Sweet-Spot / Bypass Charging | | |
 | External Display Screen-Off / Resolution Override | | |
 
-## 3. Output kiểm tra (`kgxctl diag`)
+## 3. Diagnostic Output (`kgxctl diag`)
 ```text
-(Chạy `su -c "/data/adb/modules/ksu_ultimate_gaming_x/bin/kgxctl diag"` và dán kết quả vào đây)
+(Run `su -c "/data/adb/modules/ksu_ultimate_gaming_x/bin/kgxctl diag"` and paste output here)
 ```

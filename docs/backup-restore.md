@@ -1,19 +1,21 @@
-# Sao lưu, Cập nhật, Khôi phục & Gỡ cài đặt
+# Backup, Update, Rollback, Uninstall & Recovery
 
-## 1. Mục đích
-Hướng dẫn chi tiết cách sao lưu cấu hình (`backup.sh`), cập nhật phiên bản mới, rollback cấu hình khi gặp sự cố, gỡ bỏ hoàn toàn module và các phương án cứu hộ nếu máy bị treo khởi động.
+> **Language**: **English** | [Tiếng Việt](vi/backup-restore.md)
+
+## 1. Purpose
+Detailed procedures for backing up configuration (`backup.sh`), updating safely, rolling back bad settings, cleanly uninstalling the module, and recovering from boot issues.
 
 ---
 
-## 2. Sao lưu & Khôi phục cấu hình (`kgxctl backup`)
+## 2. Backup & Restore (`kgxctl backup`)
 
-### Tạo bản sao lưu
-Lưu toàn bộ `config/`, `profiles/`, và ảnh chụp gốc (`state/orig_props.tsv`, `state/orig_display.env`, `state/orig_net.env`) vào `/data/adb/ksu_gaming_x/backups/kgx_backup_<ngay>_<ten>.tar.gz`:
+### Create a Backup
+Saves `config/`, `profiles/`, and stock snapshots (`state/orig_props.tsv`, `state/orig_display.env`, `state/orig_net.env`) to `/data/adb/ksu_gaming_x/backups/kgx_backup_<date>_<label>.tar.gz`:
 ```sh
 su -c "/data/adb/modules/ksu_ultimate_gaming_x/bin/kgxctl backup create manual"
 ```
 
-### Liệt kê & Phục hồi bản sao lưu
+### List & Restore Backups
 ```sh
 su -c "/data/adb/modules/ksu_ultimate_gaming_x/bin/kgxctl backup list"
 su -c "/data/adb/modules/ksu_ultimate_gaming_x/bin/kgxctl backup restore kgx_backup_20261122_120000_manual.tar.gz"
@@ -21,22 +23,22 @@ su -c "/data/adb/modules/ksu_ultimate_gaming_x/bin/kgxctl backup restore kgx_bac
 
 ---
 
-## 3. Cập nhật phiên bản mới (Update)
-1. **Kiểm tra phiên bản hiện tại**: Mở Companion APK hoặc đọc `/data/adb/modules/ksu_ultimate_gaming_x/module.prop`.
-2. **Sao lưu cấu hình**: Chạy `kgxctl backup create pre_update` (hoặc tạo backup trong app).
-3. **Tải đúng bản phát hành mới** trên [GitHub Releases](https://github.com/hangothanhh/ksu-ultimate-gaming-x/releases) và **xác minh SHA-256** theo [docs/installation.md](installation.md).
-4. **Cập nhật có giữ cấu hình không?**:
-   - Đọc `CHANGELOG.md` trước khi cài.
-   - Theo kiểm tra `customize.sh` trong phiên bản `v1.0.0`: trình cài đặt **giữ lại** các file trong `/data/adb/ksu_gaming_x/config/` (`global.conf`, `custom_games.tsv`, `spoof_denylist.list`), `profiles/custom_profiles.tsv`, và tự migrate bổ sung khóa còn thiếu (`PLAY_INTEGRITY_SHIELD`, `SPOOF_EXCLUDE_SETTINGS`, `orig_display.env`).
-5. **Cài đặt bản mới**: Flash Module ZIP mới qua KernelSU Manager và cài đè Companion APK mới (nếu có). Sau đó khởi động lại (hoặc Soft-Reboot đúng quy trình nếu có cập nhật `zygisk/arm64-v8a.so`).
-6. **Kiểm tra sau cập nhật**: Chạy `kgxctl status` và `kgxctl hw`.
+## 3. Updating to a New Version
+1. **Check installed version**: Open the Companion APK or read `/data/adb/modules/ksu_ultimate_gaming_x/module.prop`.
+2. **Back up config**: Run `kgxctl backup create pre_update` (or use Backup inside the app).
+3. **Download & verify SHA-256**: Get the new release from [GitHub Releases](https://github.com/hangothanhh/ksu-ultimate-gaming-x/releases) and verify checksums per [docs/installation.md](installation.md).
+4. **Are settings preserved?**:
+   - Always check `CHANGELOG.md` first.
+   - In `v1.0.0` `customize.sh`, upgrades **preserve** `/data/adb/ksu_gaming_x/config/` (`global.conf`, `custom_games.tsv`, `spoof_denylist.list`), `profiles/custom_profiles.tsv`, and automatically migrate missing keys (`PLAY_INTEGRITY_SHIELD`, `SPOOF_EXCLUDE_SETTINGS`, `orig_display.env`).
+5. **Install update**: Flash the new Module ZIP inside KernelSU Manager and update the Companion APK if updated. Reboot (or perform a clean Soft-Reboot when `zygisk/arm64-v8a.so` changed).
+6. **Post-update check**: Run `kgxctl status` and `kgxctl hw`.
 
 ---
 
-## 4. Rollback cấu hình (khi mới chỉnh nhầm gây nóng/lag/lỗi)
-- **Cách 1 (Trong app)**: Gạt bật **Safe Mode (`SAFE_MODE=1`)** — daemon dừng và khôi phục ngay toàn bộ thuộc tính, độ phân giải, tần số quét, GOS, freezer.
-- **Cách 2 (Nút Action trong KernelSU Manager)**: Bấm nút **Action** bên cạnh module `KSU Ultimate Gaming X` (`module/action.sh`), lệnh này chạy `kgxctl rollback` rồi khởi động lại daemon sạch.
-- **Cách 3 (Qua ADB / Terminal root)**:
+## 4. Instant Rollback (If Settings Cause Lag, Heat, or Issues)
+- **Method 1 (Companion App)**: Toggle **Safe Mode (`SAFE_MODE=1`)** — stops the daemon and restores all properties, resolution, refresh rate, GOS, and freezer states immediately.
+- **Method 2 (KernelSU Manager Action button)**: Tap **Action** next to `KSU Ultimate Gaming X` (`module/action.sh` executes `kgxctl rollback` and restarts cleanly).
+- **Method 3 (ADB / Root Terminal)**:
   ```sh
   su -c "/data/adb/modules/ksu_ultimate_gaming_x/bin/kgxctl safemode on"
   su -c "/data/adb/modules/ksu_ultimate_gaming_x/bin/kgxctl rollback"
@@ -44,18 +46,18 @@ su -c "/data/adb/modules/ksu_ultimate_gaming_x/bin/kgxctl backup restore kgx_bac
 
 ---
 
-## 5. Gỡ cài đặt hoàn toàn (Uninstall)
+## 5. Clean Uninstall
 
-### Quy trình chuẩn
-1. Mở **KernelSU Manager → Mô-đun**.
-2. Để tắt tạm thời (không xóa cấu hình): gạt **tắt công tắc** của `KSU Ultimate Gaming X` rồi khởi động lại.
-3. Để gỡ hoàn toàn: bấm nút **Thùng rác / Gỡ bỏ (Uninstall)** rồi khởi động lại máy. Script `module/uninstall.sh` sẽ tự chạy ở lần boot kế tiếp để:
-   - Dừng daemon `kgx-core`.
-   - Khôi phục GOS, mạng, touch, gỡ đóng băng toàn bộ app `cgroup.freeze`, tắt Bypass Charging, khôi phục RAM/thermal/CPU/GPU, reset `wm size`/`density`, bật lại màn hình trong, khôi phục tần số quét, hoàn nguyên `GameManager` và xóa `system.prop` / spoof props.
-   - Xóa `/data/adb/ksu_gaming_x` (nếu `KEEP_BACKUPS_ON_UNINSTALL=1`, giữ lại duy nhất thư mục `backups/`).
-4. Gỡ **KSU Gaming X APK** như ứng dụng Android bình thường.
+### Standard Procedure
+1. Open **KernelSU Manager → Modules**.
+2. To disable temporarily without wiping settings: toggle the module **OFF** and reboot.
+3. To remove completely: tap **Uninstall (Trash icon)** and reboot. On next boot, `module/uninstall.sh`:
+   - Stops `kgx-core`.
+   - Restores GOS, network, touch, unfreezes all `cgroup.freeze` apps, disables Bypass Charging, restores RAM/thermal/CPU/GPU, resets `wm size`/`density`, turns internal display back on, restores refresh rate, clears `GameManager` state, and deletes `system.prop` / spoof props.
+   - Deletes `/data/adb/ksu_gaming_x` (preserving only `backups/` if `KEEP_BACKUPS_ON_UNINSTALL=1`).
+4. Uninstall the **KSU Gaming X APK** like a regular Android app.
 
-### Kiểm tra sau khi gỡ không còn service chạy
+### Verify Zero Leftover Background Services
 ```sh
 ps -A | grep -E 'kgx-core|gaming_daemon' || echo "Clean"
 ls -la /data/adb/modules/ksu_ultimate_gaming_x 2>/dev/null || echo "Module removed"
@@ -63,12 +65,12 @@ ls -la /data/adb/modules/ksu_ultimate_gaming_x 2>/dev/null || echo "Module remov
 
 ---
 
-## 6. Recovery — Cứu hộ khi gặp sự cố theo từng mức độ
+## 6. Recovery Guide by Severity
 
-| Tình huống | Phương pháp cứu hộ phù hợp & đã kiểm tra | Cảnh báo mất dữ liệu |
+| Scenario | Safe & Verified Recovery Method | Data Loss Risk |
 |---|---|---|
-| **Chỉ APK bị crash / giao diện lỗi** | Xóa cache app APK hoặc cài lại APK bản đúng SHA-256; module nền vẫn an toàn | Không mất dữ liệu |
-| **Module không tải / không hiệu lực** | Kiểm tra KernelSU còn hoạt động không (đặc biệt trên máy temproot), kiểm tra `SAFE_MODE` có đang `=1` không | Không mất dữ liệu |
-| **Máy lag/nóng bất thường sau khi chỉnh** | Bấm **Action** trong KernelSU Manager hoặc `kgxctl safemode on` | Không mất dữ liệu |
-| **Module gây bootloop (treo logo Android)** | **Cơ chế tự động của module**: `post-fs-data.sh` đếm `boot_counter`. Nếu khởi động lỗi liên tiếp **2 lần**, lần boot thứ 2 tự động bật `SAFE_MODE=1`, xóa `system.prop` và khôi phục thuộc tính gốc. | Không mất dữ liệu |
-| **Không vào được Android dù đã qua bootloop guard** | Dùng **KernelSU Safe Mode** (tổ hợp phím giảm âm lượng lúc boot tùy phiên bản KernelSU để vô hiệu hóa toàn bộ module), hoặc trên **KernelSU temproot** chỉ cần ép tắt nguồn / khởi động lại bình thường là về ROM gốc chưa inject KSU, hoặc flash lại `boot.img` gốc qua Odin/Fastboot nếu cài KSU vĩnh viễn. | **CẢNH BÁO**: Flash nhầm phân vùng hoặc Wipe Data / Factory Reset trong Recovery sẽ **XÓA SẠCH DỮ LIỆU CÁ NHÂN** trên máy! Không tự ý xóa thủ công file hệ thống `/system`. |
+| **Only APK crashes / UI fails** | Clear APK cache/data or reinstall APK matching SHA-256; background module remains safe | None |
+| **Module not loading / inactive** | Verify KernelSU is active (especially on temproot) and check whether `SAFE_MODE=1` is set | None |
+| **Sudden lag / overheating after tweaking** | Tap **Action** in KernelSU Manager or run `kgxctl safemode on` | None |
+| **Bootloop (stuck on boot logo)** | **Built-in protection**: `post-fs-data.sh` tracks `boot_counter`. After **2 consecutive failed boots**, it automatically enables `SAFE_MODE=1`, deletes `system.prop`, and restores stock properties. | None |
+| **Still cannot boot Android** | Boot into **KernelSU Safe Mode** (hold Volume Down on supported KernelSU builds to disable all modules); on **KernelSU temproot**, a force power-off / normal cold boot returns to stock unrooted Android; on permanent KSU, re-flash stock `boot.img` via Odin/Fastboot. | **WARNING**: Flashing wrong partitions or running Wipe Data / Factory Reset in Recovery **ERASES ALL PERSONAL DATA**! Never manually delete files under `/system`. |

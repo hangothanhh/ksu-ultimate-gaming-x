@@ -1,35 +1,35 @@
 ---
-name: Báo lỗi (Bug Report)
-about: Báo lỗi module KernelSU, app điều khiển, tần số quét 120Hz, crash hoặc lỗi build
+name: Bug Report
+about: Report a KernelSU module, Companion APK, 120Hz display, crash, or build issue (English preferred; Vietnamese also welcome)
 title: "[Bug] "
 labels: bug
 assignees: ''
 ---
 
-## 1. Mô tả lỗi
-Mô tả ngắn gọn chuyện gì đã xảy ra và kết quả bạn mong đợi là gì.
+## 1. Issue Description
+Briefly describe what happened and what you expected to happen.
 
-## 2. Thông tin thiết bị (Bắt buộc)
-- **Mẫu máy (Model)**: (VD: Galaxy S22 SM-S901B)
-- **Phiên bản Android / ROM**: (VD: Android 12 / One UI 4.1)
-- **Phiên bản KernelSU & Zygisk**: (VD: KernelSU ..., ReZygisk ...)
-- **Phiên bản KSU Ultimate Gaming X**: `v1.0.0`
-- **APK hay Module**: (Module ZIP / Companion APK / Cả hai)
+## 2. Device Information (Required)
+- **Device Model**: (e.g., Galaxy S22 SM-S901B)
+- **Android / ROM Version**: (e.g., Android 12 / One UI 4.1)
+- **KernelSU & Zygisk Version**: (e.g., KernelSU ..., ReZygisk ...)
+- **KSU Ultimate Gaming X Version**: `v1.0.0`
+- **Affected Component**: (Module ZIP / Companion APK / Both)
 
-## 3. Các bước tái hiện lỗi
+## 3. Steps to Reproduce
 1. ...
 2. ...
 3. ...
 
-## 4. Báo cáo chẩn đoán đã ẩn thông tin nhạy cảm (`kgxctl diag`)
-> **QUAN TRỌNG**: Chạy lệnh sau trong terminal có root (hoặc ADB shell) rồi dán kết quả vào đây. Không dán serial, IMEI, địa chỉ MAC hoặc token cá nhân.
+## 4. Redacted Diagnostic Report (`kgxctl diag`)
+> **IMPORTANT**: Run the command below in a rooted terminal (or ADB shell) and paste the output here. Never paste raw serial numbers, IMEIs, MAC addresses, or tokens.
 ```sh
 su -c "/data/adb/modules/ksu_ultimate_gaming_x/bin/kgxctl diag"
 ```
 
 ```text
-(Dán output của kgxctl diag vào đây)
+(Paste kgxctl diag output here)
 ```
 
-## 5. Ảnh chụp màn hình / Log bổ sung (nếu có)
-- Đính kèm ảnh (nhớ che thông tin cá nhân nếu có).
+## 5. Screenshots / Extra Logs (Optional)
+- Attach screenshots (mask any personal information first).

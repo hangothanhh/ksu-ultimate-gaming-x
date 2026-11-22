@@ -1,44 +1,46 @@
-# Quản lý Nhiệt độ, Exynos Sweet-Spot & Bypass Charging
+# Thermal Management, Exynos Sweet-Spot & Bypass Charging
 
-## 1. Mục đích
-Giải thích cách `thermal.sh`, `power.sh`, `gos.sh` và `kgx-core` theo dõi nhiệt độ pin/CPU/GPU, cách hoạt động của chế độ **Sustained Sweet-Spot**, **Soft Thermal Step-Down**, **Bypass Charging**, **Samsung GOS Neutralizer** và các ranh giới bảo vệ phần cứng tuyệt đối.
+> **Language**: **English** | [Tiếng Việt](vi/thermal-management.md)
+
+## 1. Purpose
+Explains how `thermal.sh`, `power.sh`, `gos.sh`, and `kgx-core` monitor battery/CPU/GPU temperatures, alongside **Sustained Sweet-Spot**, **Soft Thermal Step-Down**, **Bypass Charging**, **Samsung GOS Neutralizer**, and non-negotiable hardware safety boundaries.
 
 ---
 
-## 2. Ranh giới bảo vệ phần cứng tuyệt đối
+## 2. Hard Silicon Protection Boundaries
 > [!IMPORTANT]
-> Module **KHÔNG BAO GIỜ** vô hiệu hóa Thermal Protection của silicon hay sửa các node `trip_point_*` (`kgx_is_protected_sysfs()` chặn mọi thao tác ghi vào `trip_point_*`, `*tmu*`, `throttling`, `*ifpo*`, `selinux`). Bảo vệ nhiệt phần cứng của kernel vẫn hoạt động 100% để ngăn cháy nổ hoặc sập nguồn.
+> This module **NEVER** disables silicon thermal protection or modifies hardware `trip_point_*` nodes (`kgx_is_protected_sysfs()` blocks every write to `trip_point_*`, `*tmu*`, `throttling`, `*ifpo*`, and `selinux`). Kernel-level thermal protection stays 100% active at all times to prevent hardware damage or unexpected shutdowns.
 
-Ngoài ra, qua kiểm tra dump crash thực tế trên Galaxy S22 Exynos 2200 (`SError 0xbe000011`), module tuyệt đối **cấm ghi `/sys/kernel/gpu/gpu_ifpo_control`** (Inter-Frame Power Off) khi đang render để tránh panic/reboot.
+Based on physical crash analysis on Galaxy S22 Exynos 2200 (`SError 0xbe000011`), writes to **`/sys/kernel/gpu/gpu_ifpo_control`** (Inter-Frame Power Off) are also strictly blocked to avoid kernel panics/reboots while rendering.
 
 ---
 
-## 3. Các chế độ nhiệt & nguồn
+## 3. Thermal & Power Profiles
 
-### A. Thermal Guard mặc định (`THERMAL_GUARD_ENABLED=1`)
-Theo dõi liên tục cảm biến pin, CPU và GPU theo các ngưỡng trong `global.conf` (`THERMAL_WARN_*`, `THERMAL_HOT_*`, `THERMAL_CRIT_*`) với độ trễ hysteresis:
-- `NORMAL`: cho phép full mode đã chọn.
-- `WARM` (`batt >= 38°C` hoặc `cpu >= 68°C`): chuẩn bị giảm áp lực nhiệt.
-- `HOT` (`batt >= 41°C` hoặc `cpu >= 76°C`): hạ mục tiêu FPS tối đa xuống `90 FPS`.
-- `CRITICAL` (`batt >= 44°C` hoặc `cpu >= 85°C`): hạ trần FPS xuống `60 FPS` và nới xung min/max về an toàn.
+### A. Default Thermal Guard (`THERMAL_GUARD_ENABLED=1`)
+Monitors battery, CPU, and GPU sensors using `global.conf` thresholds (`THERMAL_WARN_*`, `THERMAL_HOT_*`, `THERMAL_CRIT_*`) with hysteresis:
+- `NORMAL`: full configured performance mode allowed.
+- `WARM` (`batt >= 38°C` or `cpu >= 68°C`): prepares thermal headroom.
+- `HOT` (`batt >= 41°C` or `cpu >= 76°C`): lowers target FPS cap to `90 FPS`.
+- `CRITICAL` (`batt >= 44°C` or `cpu >= 85°C`): caps target FPS at `60 FPS` and relaxes min/max clocks for safety.
 
 ### B. Sustained Sweet-Spot (`SUSTAINED_SWEET_SPOT=1`) & Thermal Unlock (`THERMAL_UNLOCK=1`)
-- **Sustained Sweet-Spot** (khuyên dùng cho Exynos 2200 khi chơi dài): Khóa trần xung ở vùng hiệu suất ổn định (~82% peak, VD GPU ~1095 MHz thay vì 1306 MHz) để giữ khung hình đều mà không bị nhiệt bùng lên quá sớm.
-- **Thermal Unlock** (*EXPERIMENTAL trên thiết bị chưa kiểm chứng*): Nới giới hạn phần mềm ở `exynos-ufcc` / `exynos-migov` (bảo toàn silicon `trip_point_*`), vẫn tự chuyển sang `UNLOCKED_COOL` (giữ trần max nhưng nới xung min idle) nếu CPU `>= 82°C` hoặc pin `>= 44°C`.
+- **Sustained Sweet-Spot** *(recommended for long Exynos 2200 sessions)*: Locks peak clocks around the efficiency sweet spot (~82% peak, e.g., ~1095 MHz GPU instead of 1306 MHz) to hold steadier frame times without early thermal throttling.
+- **Thermal Unlock** *(EXPERIMENTAL on untested hardware)*: Relaxes software caps in `exynos-ufcc` / `exynos-migov` (preserving silicon `trip_point_*`), while automatically shifting to `UNLOCKED_COOL` (keeps ceiling open but drops min idle clocks) if CPU `>= 82°C` or battery `>= 44°C`.
 
-### C. Soft Thermal Step-Down (`SOFT_THERMAL_STEP=1`) & Thermal Alert
-- Tự hạ bậc nhẹ xung đỉnh theo 2 tier trước khi máy đạt ngưỡng quá nhiệt nặng (`thermal_alert_action` hỗ trợ `notify`, `step_down`, `bypass`, `both`).
+### C. Soft Thermal Step-Down (`SOFT_THERMAL_STEP=1`) & Thermal Alerts
+- Applies a gentle 2-tier peak frequency step-down before hitting hard throttling (`thermal_alert_action` supports `notify`, `step_down`, `bypass`, `both`).
 
 ### D. Safe Bypass Charging (`BYPASS_CHARGING=1`, `power.sh`)
-- Khi máy đang cắm sạc **và** phần trăm pin `>= BYPASS_MIN_PCT` (mặc định `80%`, hysteresis tắt khi `< BYPASS_MIN_PCT - 3%` = `77%`), module kích hoạt node sạc nhánh tương ứng của kernel (`batt_slate_mode`, `input_suspend`, `charging_enabled` hoặc `store_mode`) để nuôi máy trực tiếp từ sạc, giảm nhiệt sinh ra từ quá trình nạp pin.
-- Tự khôi phục dòng sạc bình thường ngay khi thoát game, rút sạc, bật `SAFE_MODE=1` hoặc gỡ module.
-- **Hạn chế**: Phụ thuộc kernel và phần cứng máy có cung cấp sysfs node hỗ trợ sạc nhánh hay không (xem `bypass_supported` trong `kgxctl status`).
+- When plugged in **and** battery level `>= BYPASS_MIN_PCT` (default `80%`, switches off at `< BYPASS_MIN_PCT - 3%` = `77%`), activates the kernel's charging-bypass sysfs node (`batt_slate_mode`, `input_suspend`, `charging_enabled`, or `store_mode`) so AC power runs the board directly with minimal battery heat.
+- Automatically restores normal charging on game exit, unplugging, enabling `SAFE_MODE=1`, or uninstalling.
+- **Limitation**: Requires kernel support for one of the bypass sysfs nodes (check `bypass_supported` via `kgxctl status`).
 
 ### E. Samsung GOS Neutralizer (`GOS_NEUTRALIZE=1`, `gos.sh`)
-- Vô hiệu hóa tạm thời gói `com.samsung.android.game.gos` qua `pm disable-user` khi bật tùy chọn (chỉ trên máy Samsung có gói này), và bật lại (`pm enable`) ngay khi tắt hoặc kích hoạt `SAFE_MODE=1` / gỡ module.
+- Temporarily disables `com.samsung.android.game.gos` (`pm disable-user`) when toggled on (Samsung devices only), and re-enables (`pm enable`) immediately when disabled, in `SAFE_MODE=1`, or on uninstall.
 
 ---
 
-## 4. Cảnh báo & Khắc phục
-- Không vừa bật `THERMAL_UNLOCK=1` + `MAX_CLOCK_LOCK=1` vừa sạc nhanh trong môi trường nóng bí. Nếu thấy máy nóng bất thường (`> 44°C` pin), tắt `THERMAL_UNLOCK` và `MAX_CLOCK_LOCK`, ưu tiên `SUSTAINED_SWEET_SPOT=1` hoặc quạt tản nhiệt.
-- Nếu lỡ kẹt cấu hình xung/pin do máy tắt ngang: `service.sh` sẽ gọi `thermal_restore_unlock` và `uninstall.sh` gọi `power_bypass_restore` + `gos_restore` + `sysfs_restore_all`.
+## 4. Warnings & Recovery
+- Do not combine `THERMAL_UNLOCK=1` + `MAX_CLOCK_LOCK=1` with fast charging in hot ambient environments. If battery exceeds `44°C`, turn off `THERMAL_UNLOCK` and `MAX_CLOCK_LOCK` and switch to `SUSTAINED_SWEET_SPOT=1` or external cooling.
+- After an abrupt shutdown or crash, `service.sh` calls `thermal_restore_unlock`, and `uninstall.sh` executes `power_bypass_restore` + `gos_restore` + `sysfs_restore_all`.

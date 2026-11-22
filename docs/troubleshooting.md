@@ -1,113 +1,114 @@
-# Khắc phục sự cố, FAQ & Báo cáo chẩn đoán (`kgxctl diag`)
+# Troubleshooting, FAQ & Redacted Diagnostic Report (`kgxctl diag`)
 
-## 1. Mục đích
-Tổng hợp các lỗi người mới hay gặp khi sử dụng **KSU Ultimate Gaming X** theo cấu trúc: *Biểu hiện → Nguyên nhân có thể → Cách kiểm tra → Cách xử lý → Khi nào cần gửi log*.
+> **Language**: **English** | [Tiếng Việt](vi/troubleshooting.md)
+
+## 1. Purpose
+Covers common beginner issues following a structured flow: *Symptoms → Possible Cause → How to Check → Fix → When to Report Logs*.
 
 ---
 
-## 2. Hướng dẫn xuất Diagnostic Report an toàn trước khi hỏi lỗi
+## 2. Exporting a Safe Redacted Diagnostic Report Before Asking for Help
 > [!IMPORTANT]
-> Trước khi gửi log lên GitHub Issues, luôn dùng `kgxctl diag`. Lệnh này **tự động che** serial, IMEI, địa chỉ MAC, email, IP riêng và token/mật khẩu thành `[REDACTED_*]`. Không tự chụp ảnh hoặc dán log thô chưa ẩn thông tin cá nhân!
+> Always use `kgxctl diag` before posting logs to GitHub Issues. It **automatically redacts** serials, IMEIs, MAC addresses, emails, private IPv4s, and tokens/passwords into `[REDACTED_*]`. Never share raw unredacted logs or screenshots exposing personal device IDs!
 
 ```sh
-# In trực tiếp báo cáo đã ẩn thông tin ra màn hình
+# Print redacted report directly to terminal
 su -c "/data/adb/modules/ksu_ultimate_gaming_x/bin/kgxctl diag"
 
-# Hoặc xuất thẳng ra thư mục Download để gửi kèm Issue
-su -c "/data/adb/modules/ksu_ultimate-gaming-x/bin/kgxctl diag /sdcard/Download/kgx_diag.txt"
+# Or export directly to Download/ for attaching to an Issue
+su -c "/data/adb/modules/ksu_ultimate_gaming_x/bin/kgxctl diag /sdcard/Download/kgx_diag.txt"
 ```
-*(Sửa đúng đường dẫn `/data/adb/modules/ksu_ultimate_gaming_x/bin/kgxctl diag /sdcard/Download/kgx_diag.txt`.)*
 
-Nếu vẫn mở được APK, báo cáo chẩn đoán ghi rõ: version module (`v1.0.0`), Android/API, kernel, KernelSU, SoC/GPU, trạng thái daemon, các cờ tính năng và 40 dòng log gần nhất (đã redact). Gửi tại: https://github.com/hangothanhh/ksu-ultimate-gaming-x/issues/new/choose
+Reports include module version (`v1.0.0`), Android/API, kernel, KernelSU, SoC/GPU, daemon state, config flags, and the last 40 redacted log lines. Open an issue at: https://github.com/hangothanhh/ksu-ultimate-gaming-x/issues/new/choose
 
 ---
 
-## 3. Danh sách lỗi thường gặp & Cách xử lý
+## 3. Common Issues & Fixes (14 Cases)
 
-### 1. Module không xuất hiện trong KernelSU Manager
-1. **Biểu hiện**: Flash xong không thấy `KSU Ultimate Gaming X` trong tab Mô-đun.
-2. **Nguyên nhân có thể**: Bạn chưa khởi động lại sau khi flash (với máy KSU thông thường); hoặc trên máy temproot bạn đã bấm *Reboot* thường làm mất KernelSU; hoặc bạn lỡ tải nhầm file *Source code ZIP* thay vì `KSU-Ultimate-Gaming-X-v1.0.0.zip`.
-3. **Cách kiểm tra**: Mở KernelSU Manager xem phần trạng thái trên cùng có báo *Đang hoạt động* không; kiểm tra trong file ZIP vừa flash có `module.prop` ở thư mục gốc không.
-4. **Cách xử lý**: Tải đúng file `KSU-Ultimate-Gaming-X-v1.0.0.zip` từ Releases, kiểm tra SHA-256, rồi flash lại.
+### 1. Module Does Not Appear in KernelSU Manager
+1. **Symptoms**: After flashing, `KSU Ultimate Gaming X` is missing in the Modules tab.
+2. **Possible Causes**: Did not reboot after flashing; on a temproot device you performed a normal *Cold Reboot* which wiped KernelSU; or you accidentally downloaded GitHub's *Source code ZIP* instead of `KSU-Ultimate-Gaming-X-v1.0.0.zip`.
+3. **Check**: Confirm KernelSU Manager status is *Working*, and verify the flashed ZIP contains `module.prop` at its root.
+4. **Fix**: Download `KSU-Ultimate-Gaming-X-v1.0.0.zip` from Releases, verify SHA-256, and re-flash.
 
-### 2. Cài file ZIP thất bại (`! Unsupported ...`)
-1. **Biểu hiện**: Màn hình flash báo lỗi đỏ có dấu `!`.
-2. **Nguyên nhân có thể**: Thiết bị không phải `arm64-v8a` (VD máy chạy Android 32-bit `armeabi-v7a` hoặc giả lập x86), Android thấp hơn 8.0 (`API < 26`), hoặc file ZIP bị hỏng lúc tải.
-3. **Cách kiểm tra**: Đọc dòng thông báo chính xác trên log cài đặt và chạy `certutil` / `sha256sum` kiểm tra file ZIP.
-4. **Cách xử lý**: Máy 32-bit và Android < 8.0 thuộc nhóm `UNSUPPORTED`; nếu lỗi do tải thiếu byte, tải lại ZIP khớp SHA-256.
+### 2. ZIP Flash Fails (`! Unsupported ...`)
+1. **Symptoms**: Flashing stops with red `!` abort text.
+2. **Possible Causes**: Device is not `arm64-v8a` (e.g., 32-bit `armeabi-v7a` or x86 emulator), Android is below 8.0 (`API < 26`), or download was corrupted.
+3. **Check**: Read the exact `!` line in the flash log and run `certutil` / `sha256sum`.
+4. **Fix**: 32-bit and Android < 8.0 are `UNSUPPORTED`; otherwise re-download until SHA-256 matches.
 
-### 3. Tìm không thấy WebUI trong KernelSU
-1. **Biểu hiện**: Không mở được WebUI trong KernelSU Manager.
-2. **Nguyên nhân**: Từ kiến trúc mới (đã phát hành ở `v1.0.0`), **WebUI cũ (`module/webroot`) đã bị loại bỏ hoàn toàn** và được thay thế bằng **Companion Android APK** (`KSU-Ultimate-Gaming-X-v1.0.0.apk`).
-3. **Cách xử lý**: Tải và cài `KSU-Ultimate-Gaming-X-v1.0.0.apk` từ GitHub Releases.
+### 3. No WebUI Button Inside KernelSU
+1. **Symptoms**: Cannot open WebUI from KernelSU Manager.
+2. **Cause**: Legacy **WebUI (`module/webroot`) has been completely removed** and replaced by the **Standalone Companion APK** (`KSU-Ultimate-Gaming-X-v1.0.0.apk`).
+3. **Fix**: Download and install `KSU-Ultimate-Gaming-X-v1.0.0.apk` from GitHub Releases.
 
-### 4. APK báo "Cần quyền Root" hoặc không kết nối được module
-1. **Biểu hiện**: Mở APK thấy thẻ báo lỗi không đọc được trạng thái daemon hoặc không cấp quyền root.
-2. **Nguyên nhân có thể**: Chưa cấp quyền Superuser (`su`) cho `com.kgx.ultimate` trong KernelSU Manager, hoặc chưa flash Module ZIP vào KernelSU.
-3. **Cách kiểm tra**: Kiểm tra trong `KernelSU Manager → Siêu người dùng` xem app `KSU Gaming X` đã bật chưa; kiểm tra tồn tại thư mục `/data/adb/modules/ksu_ultimate_gaming_x`.
-4. **Cách xử lý**: Bật quyền Superuser cho `KSU Gaming X`, bấm **Thử kết nối lại** trong app.
+### 4. Companion APK Reports "Root Required" or Cannot Connect
+1. **Symptoms**: APK shows daemon/module unavailable or root permission denied.
+2. **Possible Causes**: `com.kgx.ultimate` was not granted Superuser (`su`) permission in KernelSU Manager, or Module ZIP was never flashed.
+3. **Check**: Check `KernelSU Manager → Superuser` for `KSU Gaming X` and check `/data/adb/modules/ksu_ultimate_gaming_x`.
+4. **Fix**: Enable Superuser for `KSU Gaming X` and tap retry inside the app.
 
-### 5. Dashboard không hiển thị thông số hoặc FPS luôn là `N/A`
-1. **Biểu hiện**: Mở game nhưng ô FPS hiện `N/A` hoặc số liệu không nhảy.
-2. **Nguyên nhân**: Daemon chưa chạy, đang ở ngoài màn hình chính (không có layer SurfaceFlinger của game đang render), hoặc máy đang bật màn hình phụ/tắt màn hình chính không đồng bộ layer.
-3. **Cách kiểm tra**: Chạy `kgxctl daemon status` và `kgxctl overlay-tick`.
-4. **Cách xử lý**: Bật `AUTO_OPTIMIZE=1`, bật dịch vụ daemon (`kgxctl daemon start`), hoặc thử chạy game ở màn hình chính (`Display #0`).
+### 5. Dashboard Metrics Missing or FPS Always Shows `N/A`
+1. **Symptoms**: FPS stays `N/A` or live stats do not update while gaming.
+2. **Cause**: Daemon not running, viewing Home screen (no active SurfaceFlinger game render layer), or primary screen is turned off while external monitor handles rendering.
+3. **Check**: Run `kgxctl daemon status` and `kgxctl overlay-tick`.
+4. **Fix**: Enable `AUTO_OPTIMIZE=1`, run `kgxctl daemon start`, or play on the primary display (`Display #0`).
 
-### 6. CPU / GPU không có dữ liệu hoặc thiếu thông số GPU
-1. **Biểu hiện**: Mục GPU báo `0 MHz` hoặc `unknown`.
-2. **Nguyên nhân**: Đường dẫn `/sys/class/devfreq` hoặc `/sys/kernel/gpu` trên kernel/ROM tùy biến của máy khác chuẩn Adreno/Mali/Exynos S22 đã cài sẵn trong `hw_detect.sh`.
-3. **Cách kiểm tra**: Chạy `kgxctl hw` và `kgxctl diag`.
-4. **Cách xử lý**: Mở Compatibility Report kèm output `kgxctl diag` và đường dẫn `/sys/class/devfreq/*` để maintainer bổ sung hỗ trợ.
+### 6. CPU / GPU Shows `0 MHz` or `unknown`
+1. **Symptoms**: Dashboard reports unknown GPU or zero clocks.
+2. **Cause**: Your custom kernel exposes `/sys/class/devfreq` or `/sys/kernel/gpu` at paths differing from built-in Adreno/Mali/Exynos S22 patterns in `hw_detect.sh`.
+3. **Check**: Run `kgxctl hw` and `kgxctl diag`.
+4. **Fix**: Submit a Compatibility Report with `kgxctl diag` output and `ls /sys/class/devfreq/`.
 
-### 7. FPS không tăng hoặc game vẫn giới hạn 60 FPS
-1. **Biểu hiện**: Đã bật game profile `120 FPS` nhưng game vẫn khóa 60 FPS.
-2. **Nguyên nhân có thể**:
-   - Game khóa cứng ở tầng engine (`GAME_CAP`, ví dụ *Genshin Impact* khóa 60 FPS trên Android).
-   - Màn hình máy hoặc màn hình Samsung DeX chỉ có trần 60/75Hz (`DISPLAY_LIMIT`).
-   - Máy đang quá nhiệt (`CRITICAL` giới hạn 60 FPS).
-   - Chưa khởi động lại game sau khi đổi cấu hình Spoof/Downscale.
-3. **Cách kiểm tra**: Chạy `kgxctl games get <package>` để xem trường `primary_limiter` và `explanation`.
-4. **Cách xử lý**: Đóng hẳn game (`Force Stop`) rồi mở lại; nếu đang chạy trong Samsung DeX trên màn 60/75Hz, chuyển ra chơi trên màn chính 120Hz.
+### 7. FPS Does Not Increase or Stays Capped at 60 FPS
+1. **Symptoms**: Game profile is set to `120 FPS`, yet the game only allows or runs at 60 FPS.
+2. **Possible Causes**:
+   - Hard game-engine Android cap (`GAME_CAP`, e.g., *Genshin Impact* locks 60 FPS on Android).
+   - Active display or Samsung DeX external display is capped at 60/75Hz (`DISPLAY_LIMIT`).
+   - Device hit `CRITICAL` thermal throttling (60 FPS cap).
+   - Game was not restarted after changing Spoof or Downscale settings.
+3. **Check**: Run `kgxctl games get <package>` and read `primary_limiter` + `explanation`.
+4. **Fix**: Force-stop and relaunch the game; if in Samsung DeX on a 60/75Hz monitor, switch to the internal 120Hz phone display (`Display #0`).
 
-### 8. Màn hình bị tụt về 60Hz hoặc kẹt 60Hz sau Soft/Hard Reboot
-1. **Biểu hiện**: Thoát game hoặc khởi động lại máy xong màn hình bị kẹt 60Hz.
-2. **Nguyên nhân có thể**: Phiên game ngắt đột ngột trước khi restore, hoặc công cụ ngoài (như SamHelper) để `120.1` khiến `DisplayModeDirector` One UI từ chối khóa 120Hz, hoặc đang chạy bản cũ chưa vá lỗi `hw_detect.sh`.
-3. **Cách kiểm tra**: Chạy `kgxctl hw` và kiểm tra `settings get system min_refresh_rate` / `peak_refresh_rate`.
-4. **Cách xử lý**: Cập nhật lên `v1.0.0`, chạy `kgxctl display recover` (hoặc `kgxctl display restore`).
+### 8. Screen Drops to 60Hz or Gets Stuck at 60Hz After Soft/Hard Reboot
+1. **Symptoms**: After exiting a game or rebooting, screen refresh rate stays stuck at 60Hz.
+2. **Possible Causes**: Abrupt reboot mid-session before restore ran, third-party tools (like SamHelper) writing `120.1` (rejected by One UI `DisplayModeDirector`), or running an outdated pre-fix build.
+3. **Check**: Run `kgxctl hw` and inspect `settings get system min_refresh_rate` / `peak_refresh_rate`.
+4. **Fix**: Ensure `v1.0.0` is installed and run `kgxctl display recover` (or `kgxctl display restore`).
 
-### 9. Nhiệt độ cao khi chơi game lâu
-1. **Biểu hiện**: Máy nóng nhanh, tụt FPS sau 10–15 phút.
-2. **Nguyên nhân**: Đang bật đồng thời `THERMAL_UNLOCK=1` + `MAX_CLOCK_LOCK=1` ở nhiệt độ phòng cao.
-3. **Cách xử lý**: Tắt `MAX_CLOCK_LOCK`, chuyển sang **`SUSTAINED_SWEET_SPOT=1`** và bật **`BYPASS_CHARGING=1`** (nếu máy hỗ trợ và đang cắm sạc >= 80%), kết hợp tản nhiệt ngoài.
+### 9. Rapid Overheating During Long Gaming Sessions
+1. **Symptoms**: Phone heats quickly and throttles FPS after 10–15 minutes.
+2. **Cause**: `THERMAL_UNLOCK=1` and `MAX_CLOCK_LOCK=1` both enabled in warm ambient conditions.
+3. **Fix**: Turn off `MAX_CLOCK_LOCK`, switch to **`SUSTAINED_SWEET_SPOT=1`** and **`BYPASS_CHARGING=1`** (while plugged in >= 80% if supported), plus external cooling.
 
-### 10. Chơi game vẫn giật hoặc game văng bất ngờ
-1. **Biểu hiện**: Đang chơi tự nhiên đóng app hoặc khựng mạnh.
-2. **Nguyên nhân**: Có thể do thiếu RAM vật lý, xung đột với app tinh chỉnh kernel khác (VD Konabess / LSpeed / FDE), hoặc thay đổi `downscale` trong lúc game đang chạy.
-3. **Cách kiểm tra**: Đọc `kgxctl logs 40` và kiểm tra có `SIGSEGV`/`SIGILL` trong `logcat -b crash` hay không.
-4. **Cách xử lý**: Đóng hẳn game trước khi đổi mức `downscale`; nếu cài module tinh chỉnh hiệu năng khác cùng lúc, hãy tắt module kia để cô lập lỗi.
+### 10. Micro-Stutter or Unexpected Game Crashes
+1. **Symptoms**: Game closes unexpectedly or stutters heavily.
+2. **Possible Causes**: Low physical RAM, conflicts with other kernel tweakers (Konabess / LSpeed / FDE), or changing `downscale` while the game process is running.
+3. **Check**: Inspect `kgxctl logs 40` and `logcat -b crash` for `SIGSEGV`/`SIGILL`.
+4. **Fix**: Always Force Stop the game before altering `downscale`; disable competing performance modules to isolate conflicts.
 
-### 11. Service / Daemon `kgx-core` không tự khởi động
-1. **Biểu hiện**: Sau khi bật máy, Companion APK báo daemon dừng (`running=false`).
-2. **Nguyên nhân**: `SAFE_MODE=1` đang bật (sau 2 lần khởi động lỗi liên tiếp), hoặc `AUTO_OPTIMIZE=0`.
-3. **Cách kiểm tra**: Chạy `kgxctl status` và `kgxctl diag`.
-4. **Cách xử lý**: Nếu muốn thoát Safe Mode sau khi đã ổn định, bấm nút **Action** trong KernelSU Manager hoặc chạy `kgxctl safemode off && kgxctl daemon start`.
+### 11. `kgx-core` Daemon Fails to Auto-Start
+1. **Symptoms**: Companion APK shows daemon stopped (`running=false`) after boot.
+2. **Cause**: `SAFE_MODE=1` was triggered (after 2 consecutive failed boots) or `AUTO_OPTIMIZE=0`.
+3. **Check**: Run `kgxctl status` and `kgxctl diag`.
+4. **Fix**: Once stable, tap **Action** in KernelSU Manager or run `kgxctl safemode off && kgxctl daemon start`.
 
-### 12. Module xung đột với module khác
-1. **Biểu hiện**: Spoof bị đè hoặc không hoạt động.
-2. **Nguyên nhân**: Máy đang cài đồng thời các module chỉnh props toàn hệ thống khác (như MagiskHide Props Config, module spoof khác).
-3. **Cách kiểm tra**: Chạy `kgxctl profiles conflicts`.
-4. **Cách xử lý**: Tắt các module spoof trùng lặp để tránh ghi đè `ro.product.*`.
+### 12. Conflicts With Other Spoof Modules
+1. **Symptoms**: Spoofed device model is overwritten or fails to apply.
+2. **Cause**: Conflicting system-wide prop modules (e.g., MagiskHide Props Config or other spoof modules).
+3. **Check**: Run `kgxctl profiles conflicts`.
+4. **Fix**: Disable duplicate spoof modules modifying `ro.product.*`.
 
-### 13. Lỗi Play Integrity / Ứng dụng báo thiết bị lạ / Ngân hàng
-1. **Biểu hiện**: Sau khi bật Spoof, Google Wallet/Play Protect/app Cài đặt hoặc app ngân hàng thấy tên máy spoof hoặc báo lỗi kiểm tra thiết bị.
-2. **Nguyên nhân có thể**:
-   - Đã cài mới/cập nhật `zygisk/arm64-v8a.so` nhưng chưa khởi động lại (Soft/Cold Reboot) để `zygote64` nạp bản mới; hoặc chưa cài ReZygisk/Zygisk Next.
-   - Ứng dụng ngân hàng không nằm trong danh sách Google mặc định nên cần bạn tự thêm vào **Spoof Denylist**.
-   - Ngoài ra, **không phải mọi lỗi Play Integrity đều do module** (trạng thái unlock bootloader, ROM custom, hoặc PIF/TrickyStore hết key mới là nguyên nhân gốc phổ biến).
-3. **Cách kiểm tra**: Chạy `kgxctl spoof diag` và `logcat -d -s KGX_PIShield | tail -n 20`.
-4. **Cách xử lý**: Bật `PLAY_INTEGRITY_SHIELD=1`, `SPOOF_EXCLUDE_SETTINGS=1`, thêm các app cần xem máy thật vào **Spoof Denylist** trên Companion APK. **Lưu ý**: Module không cung cấp tính năng giả mạo hardware attestation keys hay vượt anti-cheat.
+### 13. Play Integrity Failures / Banking Apps / Settings Detecting Spoof
+1. **Symptoms**: Google Wallet, Play Protect, Settings, or banking apps see the spoofed model or fail device checks.
+2. **Possible Causes**:
+   - Upgraded `zygisk/arm64-v8a.so` without rebooting / Soft-Rebooting `zygote64`, or missing ReZygisk/Zygisk Next.
+   - Banking/custom apps are outside default Google targets and need manual inclusion in **Spoof Denylist**.
+   - **Play Integrity failures are often unrelated to this module** (unlocked bootloader, custom ROM, or expired PIF/TrickyStore keyboxes).
+3. **Check**: Run `kgxctl spoof diag` and `logcat -d -s KGX_PIShield | tail -n 20`.
+4. **Fix**: Enable `PLAY_INTEGRITY_SHIELD=1` + `SPOOF_EXCLUDE_SETTINGS=1`, add sensitive apps to **Spoof Denylist** inside the APK, and Force Stop them. *Note: this module does not spoof hardware attestation keys or bypass anti-cheat.*
 
-### 14. Nhiều app đồng loạt báo dừng (`SIGILL`) ngay sau khi cập nhật nóng thủ công
-1. **Biểu hiện**: Các app hệ thống/GMS liên tục popup "đã dừng".
-2. **Nguyên nhân**: Tự ý chép đè (`unzip -o`) file `zygisk/arm64-v8a.so` khi `zygote64` đang giữ mmap phiên bản cũ trong RAM.
-3. **Cách xử lý**: Luôn cài module ZIP đúng cách qua KernelSU Manager và khởi động lại/Soft-Reboot để nạp `zygote64` sạch.
+### 14. Mass App Crashes (`SIGILL`) After Manual Hot-Overwrite
+1. **Symptoms**: System apps and GMS crash repeatedly after manual file copy.
+2. **Cause**: Running `unzip -o` directly over `zygisk/arm64-v8a.so` while `zygote64` has the previous `.so` `mmap`-ed in RAM.
+3. **Fix**: Always flash Module ZIP properly via KernelSU Manager and reboot / Soft-Reboot cleanly.
