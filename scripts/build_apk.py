@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import shutil
 import subprocess
 import sys
@@ -18,7 +19,7 @@ MODULE_DATA_DIR = ROOT / "module" / "data"
 DIST_DIR = ROOT / "dist"
 APK_NAME = "KSU-Ultimate-Gaming-X-v1.0.0.apk"
 
-SDK_ROOT = Path(r"C:\Android\sdk")
+SDK_ROOT = Path(os.environ.get("ANDROID_SDK_ROOT") or os.environ.get("ANDROID_HOME") or r"C:\Android\sdk")
 BUILD_TOOLS = SDK_ROOT / "build-tools" / "34.0.0"
 PLATFORM_JAR = SDK_ROOT / "platforms" / "android-34" / "android.jar"
 
@@ -26,9 +27,15 @@ AAPT2 = BUILD_TOOLS / "aapt2.exe"
 D8 = BUILD_TOOLS / "d8.bat"
 ZIPALIGN = BUILD_TOOLS / "zipalign.exe"
 APKSIGNER = BUILD_TOOLS / "apksigner.bat"
-JAVAC = Path(r"C:\Program Files\Microsoft\jdk-17.0.21.21-hotspot\bin\javac.exe")
-KEYTOOL = Path(r"C:\Program Files\Microsoft\jdk-17.0.21.21-hotspot\bin\keytool.exe")
-KEYSTORE = APP_DIR / "kgx.keystore"
+JAVAC = Path(os.environ.get("JAVA_HOME", r"C:\Program Files\Microsoft\jdk-17.0.21.21-hotspot")) / "bin" / "javac.exe"
+KEYTOOL = Path(os.environ.get("JAVA_HOME", r"C:\Program Files\Microsoft\jdk-17.0.21.21-hotspot")) / "bin" / "keytool.exe"
+
+# Local development debug keystore fallback only (ignored in .gitignore).
+# For custom release signing, set KGX_KEYSTORE_PATH / KGX_KEYSTORE_PASS / KGX_KEY_PASS / KGX_KEY_ALIAS.
+KEYSTORE = Path(os.environ.get("KGX_KEYSTORE_PATH") or str(APP_DIR / "kgx.keystore"))
+KS_PASS = os.environ.get("KGX_KEYSTORE_PASS", "kgxultimate")
+KEY_PASS = os.environ.get("KGX_KEY_PASS", KS_PASS)
+KEY_ALIAS = os.environ.get("KGX_KEY_ALIAS", "kgxkey")
 
 
 def find_exe(preferred: Path, name: str) -> str:
@@ -49,16 +56,17 @@ def run(cmd: list[str], cwd: Path | None = None) -> None:
 def ensure_keystore(keytool_bin: str) -> None:
     if KEYSTORE.is_file():
         return
+    KEYSTORE.parent.mkdir(parents=True, exist_ok=True)
     run([
         keytool_bin, "-genkeypair", "-v",
         "-keystore", str(KEYSTORE),
-        "-alias", "kgxkey",
+        "-alias", KEY_ALIAS,
         "-keyalg", "RSA",
         "-keysize", "2048",
         "-validity", "10000",
-        "-storepass", "kgxultimate",
-        "-keypass", "kgxultimate",
-        "-dname", "CN=KSU Ultimate Gaming X, OU=Engineering, O=KGX, C=VN",
+        "-storepass", KS_PASS,
+        "-keypass", KEY_PASS,
+        "-dname", "CN=KSU Ultimate Gaming X Dev, OU=Engineering, O=KGX, C=VN",
     ])
 
 
@@ -199,9 +207,9 @@ def build_apk() -> Path:
         run([
             apksigner, "sign",
             "--ks", str(KEYSTORE),
-            "--ks-pass", "pass:kgxultimate",
-            "--key-pass", "pass:kgxultimate",
-            "--ks-key-alias", "kgxkey",
+            "--ks-pass", f"pass:{KS_PASS}",
+            "--key-pass", f"pass:{KEY_PASS}",
+            "--ks-key-alias", KEY_ALIAS,
             "--out", str(out_apk),
             str(aligned_apk),
         ])

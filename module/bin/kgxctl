@@ -510,6 +510,126 @@ cmd_logs() {
     printf ']}\n'
 }
 
+diag_redact() {
+    awk '
+    function redact_line(s,    out_s, head, mid, tail, sep, keyp, out_ip, pre, ip, post) {
+        gsub(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z][A-Za-z]+/, "[REDACTED_EMAIL]", s)
+        gsub(/[0-9A-Fa-f][0-9A-Fa-f]:[0-9A-Fa-f][0-9A-Fa-f]:[0-9A-Fa-f][0-9A-Fa-f]:[0-9A-Fa-f][0-9A-Fa-f]:[0-9A-Fa-f][0-9A-Fa-f]:[0-9A-Fa-f][0-9A-Fa-f]/, "[REDACTED_MAC]", s)
+        gsub(/(ghp|gho|ghu|ghs|github_pat)_[A-Za-z0-9_]+/, "[REDACTED_SECRET]", s)
+        gsub(/(Bearer|bearer|BEARER)[ \t]+[A-Za-z0-9._~+\/=-]+/, "Bearer [REDACTED_SECRET]", s)
+
+        out_s = ""
+        while (match(s, /(ro\.serialno|ro\.boot\.serialno|ro\.ril\.miui\.imei|persist\.radio\.imei|serialno|serial|imei|token|password|passwd|secret|keypass|storepass|SERIALNO|SERIAL|IMEI|TOKEN|PASSWORD|SECRET)[ \t]*[=:][ \t]*[^ \t\r\n,;]+/)) {
+            head = substr(s, 1, RSTART - 1)
+            mid = substr(s, RSTART, RLENGTH)
+            tail = substr(s, RSTART + RLENGTH)
+            sep = index(mid, "=")
+            if (sep == 0) sep = index(mid, ":")
+            keyp = substr(mid, 1, sep)
+            out_s = out_s head keyp "[REDACTED_SECRET]"
+            s = tail
+        }
+        s = out_s s
+
+        gsub(/[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]+/, "[REDACTED_ID]", s)
+
+        out_ip = ""
+        while (match(s, /[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/)) {
+            pre = substr(s, 1, RSTART - 1)
+            ip = substr(s, RSTART, RLENGTH)
+            post = substr(s, RSTART + RLENGTH)
+            if (ip == "1.1.1.1" || ip == "8.8.8.8" || ip == "127.0.0.1") {
+                out_ip = out_ip pre ip
+            } else {
+                out_ip = out_ip pre "[REDACTED_IP]"
+            }
+            s = post
+        }
+        return out_ip s
+    }
+    {
+        print redact_line($0)
+    }'
+}
+
+diag_emit_raw() {
+    local d_running="$1" d_pid="$2" and_rel="$3" kern_rel="$4" arch_m="$5" ksu_ver="$6"
+    local active_s="$7" peak_rr="$8" min_rr="$9" sec_rrm="${10}" deny_cnt="${11}"
+
+    printf '=== KSU Ultimate Gaming X - Diagnostic Report (v1.0.0) ===\n'
+    printf 'Generated          : %s\n' "$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || printf unknown)"
+    printf 'Android / API      : %s (SDK %s)\n' "${and_rel:-unknown}" "${REAL_ANDROID_API:-0}"
+    printf 'Kernel / Arch      : %s (%s)\n' "${kern_rel:-unknown}" "${arch_m:-unknown}"
+    printf 'KernelSU           : %s\n' "${ksu_ver:-unavailable}"
+    printf 'SOC / GPU          : %s (%s) / %s (%s)\n' "${SOC_PLATFORM:-unknown}" "${SOC_VENDOR:-unknown}" "${GPU_MODEL:-unknown}" "${GPU_VENDOR:-unknown}"
+    printf 'HW Tier / Max Hz   : %s / %s Hz (supported: %s)\n' "${HW_TIER:-1}" "${DISPLAY_MAX_HZ:-60}" "${DISPLAY_SUPPORTED_HZ:-60}"
+    printf 'Daemon             : running=%s pid=%s\n' "$d_running" "${d_pid:-0}"
+    printf 'Active Session     : %s\n' "$active_s"
+    printf 'Display Settings   : peak=%s min=%s sec_rrm=%s\n' "${peak_rr:-null}" "${min_rr:-null}" "${sec_rrm:-null}"
+    printf 'Config Flags       : SAFE_MODE=%s AUTO=%s SPOOF=%s PI_SHIELD=%s EX_SETTINGS=%s DENY_CNT=%s\n' \
+        "${SAFE_MODE:-0}" "${AUTO_OPTIMIZE:-1}" "${SPOOF_ENABLED:-1}" "${PLAY_INTEGRITY_SHIELD:-1}" "${SPOOF_EXCLUDE_SETTINGS:-1}" "${deny_cnt:-0}"
+    printf 'Thermal/Ext/Freeze : GUARD=%s UNLOCK=%s SWEET=%s MAX_CLK=%s SOFT_STEP=%s GOS=%s EXT_OFF=%s RES=%s FREEZER=%s BYPASS=%s\n' \
+        "${THERMAL_GUARD_ENABLED:-1}" "${THERMAL_UNLOCK:-0}" "${SUSTAINED_SWEET_SPOT:-0}" "${MAX_CLOCK_LOCK:-0}" \
+        "${SOFT_THERMAL_STEP:-0}" "${GOS_NEUTRALIZE:-0}" "${EXT_DISPLAY_SCREEN_OFF:-0}" "${RES_OVERRIDE_ENABLED:-0}" \
+        "${FREEZER_ENABLED:-0}" "${BYPASS_CHARGING:-0}"
+    printf '\n=== Recent Engine Logs (last 40 lines, redacted) ===\n'
+    if [ -f "$KGX_DATA_DIR/logs/engine.log" ]; then
+        tail -n 40 "$KGX_DATA_DIR/logs/engine.log" 2>/dev/null
+    else
+        printf '(no engine.log)\n'
+    fi
+}
+
+cmd_diag() {
+    local out_path="${1:-}"
+    local d_running="false" d_pid=0 ksu_ver="unavailable"
+    local peak_rr="null" min_rr="null" sec_rrm="null"
+    local and_rel="unknown" kern_rel="unknown" arch_m="unknown"
+    local deny_cnt=0 active_s="idle"
+
+    if [ -n "$out_path" ]; then
+        case "$out_path" in
+            *..*|*';'*|*'`'*|*'$'*|*'<'*|*'>'*|*'|'*|*'&'*)
+                printf '{"ok":false,"error":"Invalid diagnostic output path"}\n'
+                return 1
+                ;;
+            /sdcard/Download/*|/storage/emulated/0/Download/*|"$KGX_DATA_DIR"/logs/*) ;;
+            *)
+                printf '{"ok":false,"error":"Diagnostic path must be under Download/ or logs/"}\n'
+                return 1
+                ;;
+        esac
+    fi
+
+    hw_load
+    if daemon_is_running; then
+        d_running="true"
+        d_pid="$(cat "$KGX_DATA_DIR/state/daemon.pid" 2>/dev/null | tr -dc '0-9')"
+    fi
+    command -v getprop >/dev/null 2>&1 && and_rel="$(getprop ro.build.version.release 2>/dev/null | tr -d '\r')"
+    kern_rel="$(uname -r 2>/dev/null | tr -d '\r')"
+    arch_m="$(uname -m 2>/dev/null | tr -d '\r')"
+    [ -x /data/adb/ksud ] && ksu_ver="$(/data/adb/ksud -V 2>/dev/null | head -n 1 | tr -d '\r')"
+    if command -v settings >/dev/null 2>&1; then
+        peak_rr="$(settings get system peak_refresh_rate 2>/dev/null | tr -d '\r')"
+        min_rr="$(settings get system min_refresh_rate 2>/dev/null | tr -d '\r')"
+        sec_rrm="$(settings get secure refresh_rate_mode 2>/dev/null | tr -d '\r')"
+    fi
+    deny_cnt="$(spoof_denylist_count 2>/dev/null || printf 0)"
+    if [ -f "$KGX_DATA_DIR/state/active_session.env" ]; then
+        . "$KGX_DATA_DIR/state/active_session.env"
+        active_s="${ACTIVE_PKG:-unknown} (mode=${ACTIVE_MODE:-?}, fps=${ACTIVE_FPS:-0})"
+    fi
+
+    if [ -n "$out_path" ]; then
+        mkdir -p "${out_path%/*}" 2>/dev/null || true
+        diag_emit_raw "$d_running" "$d_pid" "$and_rel" "$kern_rel" "$arch_m" "$ksu_ver" "$active_s" "$peak_rr" "$min_rr" "$sec_rrm" "$deny_cnt" | diag_redact > "$out_path"
+        printf '{"ok":true,"path":"%s"}\n' "$(json_escape "$out_path")"
+    else
+        diag_emit_raw "$d_running" "$d_pid" "$and_rel" "$kern_rel" "$arch_m" "$ksu_ver" "$active_s" "$peak_rr" "$min_rr" "$sec_rrm" "$deny_cnt" | diag_redact
+    fi
+}
+
 sub="${1:-status}"
 [ $# -gt 0 ] && shift
 
@@ -1142,6 +1262,9 @@ EOF
         display_internal_power_on >/dev/null 2>&1 || true
         gos_restore >/dev/null 2>&1 || true
         printf '{"ok":true,"rolled_back":true}\n'
+        ;;
+    diag)
+        cmd_diag "${1:-}"
         ;;
     *)
         printf '{"ok":false,"error":"Unknown command: %s"}\n' "$(json_escape "$sub")"

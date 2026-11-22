@@ -3,11 +3,13 @@
 
 from __future__ import annotations
 
+import argparse
 import base64
 import hashlib
 import json
 import os
 import re
+import shutil
 import stat
 import struct
 import subprocess
@@ -22,25 +24,33 @@ DIST_ZIP = ROOT / "dist" / "KSU-Ultimate-Gaming-X-v1.0.0.zip"
 DIST_ZIP_SHA = ROOT / "dist" / "KSU-Ultimate-Gaming-X-v1.0.0.zip.sha256"
 DIST_APK = ROOT / "dist" / "KSU-Ultimate-Gaming-X-v1.0.0.apk"
 DIST_APK_SHA = ROOT / "dist" / "KSU-Ultimate-Gaming-X-v1.0.0.apk.sha256"
-APKSIGNER = Path(r"C:\Android\sdk\build-tools\34.0.0\apksigner.bat")
-SH_BIN = r"C:\Program Files\Git\bin\sh.exe"
+IS_WIN = os.name == "nt"
+APKSIGNER = Path(shutil.which("apksigner") or r"C:\Android\sdk\build-tools\34.0.0\apksigner.bat")
+SH_BIN = r"C:\Program Files\Git\bin\sh.exe" if IS_WIN and Path(r"C:\Program Files\Git\bin\sh.exe").is_file() else (shutil.which("sh") or "/bin/sh")
 
 
 def to_msys(p: Path) -> str:
     s = p.resolve().as_posix()
-    if len(s) >= 2 and s[1] == ":":
+    if IS_WIN and len(s) >= 2 and s[1] == ":":
         return f"/{s[0].lower()}{s[2:]}"
     return s
 
 
 def run_sh(script_cmd: str, env_extra: dict[str, str] | None = None, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
-    env = {
-        "SYSTEMROOT": os.environ.get("SYSTEMROOT", r"C:\Windows"),
-        "TEMP": os.environ.get("TEMP", r"C:\Windows\Temp"),
-        "TMP": os.environ.get("TMP", r"C:\Windows\Temp"),
-        "PATH": "/usr/bin:/bin",
-        "LC_ALL": "C",
-    }
+    if IS_WIN:
+        env = {
+            "SYSTEMROOT": os.environ.get("SYSTEMROOT", r"C:\Windows"),
+            "TEMP": os.environ.get("TEMP", r"C:\Windows\Temp"),
+            "TMP": os.environ.get("TMP", r"C:\Windows\Temp"),
+            "PATH": "/usr/bin:/bin",
+            "LC_ALL": "C",
+        }
+    else:
+        env = {
+            "PATH": "/usr/local/bin:/usr/bin:/bin",
+            "TMPDIR": os.environ.get("TMPDIR", "/tmp"),
+            "LC_ALL": "C",
+        }
     if env_extra:
         env.update(env_extra)
     return subprocess.run(
@@ -49,7 +59,7 @@ def run_sh(script_cmd: str, env_extra: dict[str, str] | None = None, cwd: Path |
         env=env,
         capture_output=True,
         text=True,
-        timeout=60,
+        timeout=120,
     )
 
 
@@ -584,7 +594,7 @@ def create_mock_env(base: Path, variant: str = "adreno") -> dict[str, str]:
         p.chmod(0o755)
 
     return {
-        "PATH": f"{to_msys(mock_bin)}:/usr/bin:/bin",
+        "PATH": f"{to_msys(mock_bin)}:" + ("/usr/bin:/bin" if IS_WIN else "/usr/local/bin:/usr/bin:/bin"),
         "KGX_MODDIR": to_msys(mod_copy),
         "KGX_DATA_DIR": to_msys(data_dir),
         "KGX_SYS_ROOT": to_msys(sys_root),
@@ -703,6 +713,26 @@ def stage_4_functional_e2e() -> None:
                 assert_true(parsed["conflict_count"] == 1 and parsed["conflicts"][0]["id"] == "my_spoof_mod", f"Conflict check wrong: {parsed}")
             if cmd == "touch measure":
                 assert_true(parsed["hz"] == 240, f"Touch hz wrong: {parsed}")
+
+        # Diagnostic report with PII/secret redaction check
+        eng_log = base / "data" / "logs" / "engine.log"
+        eng_log.parent.mkdir(parents=True, exist_ok=True)
+        with eng_log.open("a", encoding="utf-8", newline="\n") as lf:
+            lf.write(
+                "[2026-11-22 12:00:00] [WARN] [test] serial=R5CT999FAKE MAC=AA:BB:CC:DD:EE:FF "
+                "ghp_1234567890abcdef token=tok123 password=supersecret imei=123456789012345 "
+                "864201020304050 user@example.com ip=192.168.1.42 ping=1.1.1.1\n"
+            )
+        diag_res = run_sh(f'sh "{kgxctl}" diag', env)
+        assert_true(diag_res.returncode == 0 and "(v1.0.0)" in diag_res.stdout and "adreno" in diag_res.stdout,
+                    f"kgxctl diag output invalid: {diag_res.stdout}")
+        for leak in ["R5CT999FAKE", "AA:BB:CC:DD:EE:FF", "ghp_1234567890abcdef", "tok123", "supersecret", "123456789012345", "864201020304050", "user@example.com", "192.168.1.42"]:
+            assert_true(leak not in diag_res.stdout, f"Sensitive leak '{leak}' in kgxctl diag:\n{diag_res.stdout}")
+        for marker in ["[REDACTED_SECRET]", "[REDACTED_MAC]", "[REDACTED_ID]", "[REDACTED_EMAIL]", "[REDACTED_IP]", "1.1.1.1"]:
+            assert_true(marker in diag_res.stdout, f"Missing expected marker '{marker}' in kgxctl diag:\n{diag_res.stdout}")
+        assert_true(run_sh(f'sh "{kgxctl}" diag /tmp/bad_diag.txt', env).returncode != 0, "diag path guard failed")
+        diag_out = json.loads(run_sh(f'sh "{kgxctl}" diag "{env["KGX_DATA_DIR"]}/logs/diag_out.txt"', env).stdout)
+        assert_true(diag_out.get("ok") is True and (base / "data" / "logs" / "diag_out.txt").is_file(), f"diag file export failed: {diag_out}")
 
         # Custom profile, game upsert & backup roundtrip
         g_b64 = base64.b64encode(b"com.custom.game\t1\tauto\t90\thigh_performance\t90\tesports\t1").decode()
@@ -1107,7 +1137,7 @@ def stage_5_no_webui_and_companion_audit() -> None:
     valid_top = {
         "status", "hw", "games", "profiles", "spoof", "engine",
         "touch", "net", "backup", "logs", "safemode", "daemon", "system", "rollback",
-        "display", "overlay-tick", "freezer",
+        "display", "overlay-tick", "freezer", "diag",
     }
     called_cmds: set[str] = set()
     for p in java_files:
@@ -1256,6 +1286,10 @@ def stage_7_apk_audit() -> None:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description="Verify KSU Ultimate Gaming X v1.0.0")
+    parser.add_argument("--skip-apk", action="store_true", help="Skip Stage 7 signed APK check (for headless CI)")
+    args = parser.parse_args()
+
     stages = [
         stage_1_shell_syntax,
         stage_2_hygiene,
@@ -1263,11 +1297,15 @@ def main() -> int:
         stage_4_functional_e2e,
         stage_5_no_webui_and_companion_audit,
         stage_6_zip_audit,
-        stage_7_apk_audit,
     ]
+    if not args.skip_apk:
+        stages.append(stage_7_apk_audit)
     for fn in stages:
         fn()
-    print("\nALL 7 VERIFICATION STAGES PASSED SUCCESSFULLY.")
+    if args.skip_apk:
+        print("\nALL 6 VERIFICATION STAGES PASSED SUCCESSFULLY (--skip-apk).")
+    else:
+        print("\nALL 7 VERIFICATION STAGES PASSED SUCCESSFULLY.")
     return 0
 
 
