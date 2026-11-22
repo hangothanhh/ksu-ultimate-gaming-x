@@ -10,7 +10,7 @@ Bộ tối ưu hiệu năng chơi game, điều phối xung nhiệt, bảo vệ 
 
 > [!WARNING]
 > **Minh bạch về AI & Cảnh báo "AI Slop":**
-> Dự án này được phát triển và biên soạn tài liệu với **sự hỗ trợ của AI**, sau đó được kiểm tra thực tế trên Samsung Galaxy S22 Exynos (Android 12 / One UI 4.1) và qua bộ kiểm thử giả lập POSIX 7 stage ([tests/verify_all.py](tests/verify_all.py)).
+> Dự án này được phát triển và biên soạn tài liệu với **sự hỗ trợ của Google Antigravity (AI coding assistant)**, sau đó được kiểm tra thực tế trên Samsung Galaxy S22 Exynos (Android 12 / One UI 4.1) và qua bộ kiểm thử giả lập POSIX 7 stage ([tests/verify_all.py](tests/verify_all.py)).
 > - **Cảnh báo AI Slop**: Mã nguồn hoặc cấu hình do AI tạo ra vẫn có thể tồn tại lỗi góc khuất trên những thiết bị/ROM mà tác giả **chưa tự tay kiểm thử**. Không coi tên một thiết bị xuất hiện trong cơ sở dữ liệu là cam kết tương thích.
 > - Chỉ những hạng mục ghi **`VERIFIED`** mới đã chạy thực tế trên phần cứng thật; mọi đóng góp PR chứa code AI chưa kiểm thử sẽ bị từ chối theo [CONTRIBUTING.md](CONTRIBUTING.md).
 
@@ -213,6 +213,7 @@ ksu-ultimate-gaming-x/
 ├── CONTRIBUTING.md                    # Quy chuẩn đóng góp & chính sách chống AI slop
 ├── LICENSE                            # Giấy phép GNU GPL v3.0+ (GPL-3.0-or-later)
 ├── NOTICE                             # Ghi công bên thứ ba & minh bạch AI
+├── AI_CONTRIBUTIONS.md                # Công bố minh bạch đóng góp của Google Antigravity
 ├── SECURITY.md                        # Chính sách bảo mật & ranh giới an toàn root
 ├── .gitignore                         # Loại trừ keystore, dist/, system.prop, cache build
 ├── .editorconfig                      # Chuẩn UTF-8 & LF
@@ -271,7 +272,10 @@ python -u tests/verify_all.py
 <a id="contributing-license--credits"></a>
 ## 9. Đóng góp, Giấy phép & Nguồn bên thứ ba
 
-- **Đóng góp & Quy chuẩn PR**: Xem **[CONTRIBUTING.md](CONTRIBUTING.md)** (chú ý quy tắc bắt buộc về minh bạch AI và chống *AI slop*).
+- **Đóng góp (Credits / Contributions)**:
+  - Maintainer chính: `hangothanhh` (thiết kế, kiểm chứng thực tế trên phần cứng thật và bảo trì dự án).
+  - Hỗ trợ phát triển: **Google Antigravity** (hỗ trợ mã nguồn, kiểm thử và tài liệu — xem chi tiết tại **[AI_CONTRIBUTIONS.md](AI_CONTRIBUTIONS.md)**).
+- **Quy chuẩn PR**: Xem **[CONTRIBUTING.md](CONTRIBUTING.md)** (chú ý quy tắc bắt buộc về minh bạch AI và chống *AI slop*).
 - **Chính sách bảo mật**: Xem **[SECURITY.md](SECURITY.md)**.
 - **Giấy phép**: Phát hành theo **[GNU General Public License v3.0 hoặc mới hơn (`GPL-3.0-or-later`)](LICENSE)** — Copyright (C) 2026 `hangothanhh`.
 - **Ghi công & Nguồn bên thứ ba**: Xem **[NOTICE](NOTICE)** (bao gồm header public Zygisk API v4 trong `companion/zygisk-spoof/include/zygisk.hpp` — Copyright 2022–2023 John "topjohnwu" Wu).

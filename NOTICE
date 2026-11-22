@@ -31,7 +31,8 @@ Copyright (C) 2026 hangothanhh
 
 Parts of the source code, Rust daemon logic, C++ Zygisk hooks, companion Android UI,
 automated mock test harness (`tests/verify_all.py`), and repository documentation were
-written or refactored with AI coding assistance and iteratively tested against:
+written or refactored with coding assistance from Google Antigravity (AI coding assistant)
+and iteratively tested against:
 - Real device testing on Samsung Galaxy S22 Exynos (SM-S901B, Android 12 / One UI 4.1,
   KernelSU temproot + ReZygisk) for Exynos/LTPO/display/crash/game-session scenarios; and
 - POSIX mock verification (`tests/verify_all.py`) for Adreno, Mali, and Exynos paths.
@@ -45,3 +46,4 @@ IMPORTANT NOTICE ABOUT AI-GENERATED ARTIFACTS ("AI SLOP" WARNING):
   (`PARTIAL`) and have not been verified on physical devices.
 - Pull requests containing unverified AI-generated tweaks ("AI slop"), fabricated device
   compatibility claims, or untested shell scripts will be rejected (see `CONTRIBUTING.md`).
+- Full scope of AI assistance and documentation-only attribution boundaries (no bot co-author trailer in Git commits) are recorded in `AI_CONTRIBUTIONS.md`.
