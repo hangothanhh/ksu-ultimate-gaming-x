@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // KSU Ultimate Gaming X v1.0.0 - Native AArch64 Rust Telemetry, Scene Overlay, Freezer & Daemon Core
 // Zero external crate dependencies (pure std + NDK libc FFI).
 

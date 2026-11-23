@@ -1,4 +1,5 @@
 #!/system/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
 # KSU Ultimate Gaming X v3.2 - Safe Bypass Charging & Battery Power Engine
 
 power_get_batt_pct() {

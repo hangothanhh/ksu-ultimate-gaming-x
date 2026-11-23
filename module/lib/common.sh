@@ -1,4 +1,5 @@
 #!/system/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
 # KSU Ultimate Gaming X - Common utilities, config, logging, JSON helpers & safe sysfs wrapper
 
 KGX_MODDIR="${KGX_MODDIR:-/data/adb/modules/ksu_ultimate_gaming_x}"

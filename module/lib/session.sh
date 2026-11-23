@@ -1,4 +1,5 @@
 #!/system/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
 # KSU Ultimate Gaming X - Unified Game Session Activation & Clean Rollback Orchestrator
 
 session_get_foreground_pkg() {

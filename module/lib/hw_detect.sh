@@ -1,4 +1,5 @@
 #!/system/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
 # KSU Ultimate Gaming X - Hardware & Capability Discovery Engine
 
 hw_detect_display_rates() {

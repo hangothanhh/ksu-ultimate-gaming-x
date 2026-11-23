@@ -1,4 +1,5 @@
 #!/system/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
 # KSU Ultimate Gaming X v1.0.0 - View & DeX-Safe cgroup v2 App Freezer
 
 freezer_is_supported() {

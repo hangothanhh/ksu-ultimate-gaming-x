@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Deterministic KernelSU module ZIP packager for KSU Ultimate Gaming X."""
 
 from __future__ import annotations
@@ -97,6 +98,20 @@ def build_zip() -> Path:
             zi.compress_type = zipfile.ZIP_DEFLATED
             zf.writestr(zi, raw)
             print(f"  + {rel:<52} mode={oct(mode)} size={len(raw)}")
+
+        for legal_name in ("LICENSE", "NOTICE"):
+            legal_path = ROOT / legal_name
+            if not legal_path.is_file():
+                raise RuntimeError(f"Required legal file missing for ZIP packaging: {legal_path}")
+            raw_legal = legal_path.read_bytes().replace(b"\r\n", b"\n")
+            if raw_legal.startswith(b"\xef\xbb\xbf"):
+                raw_legal = raw_legal[3:]
+            zi = zipfile.ZipInfo(legal_name, date_time=FIXED_DATE_TIME)
+            zi.create_system = 3  # UNIX
+            zi.external_attr = (stat.S_IFREG | 0o644) << 16
+            zi.compress_type = zipfile.ZIP_DEFLATED
+            zf.writestr(zi, raw_legal)
+            print(f"  + {legal_name:<52} mode={oct(0o644)} size={len(raw_legal)}")
 
     digest = hashlib.sha256(zip_path.read_bytes()).hexdigest()
     sha_path.write_text(f"{digest}  {ZIP_NAME}\n", encoding="utf-8", newline="\n")

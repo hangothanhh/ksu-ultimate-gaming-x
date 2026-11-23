@@ -1,4 +1,5 @@
 #!/system/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
 # KSU Ultimate Gaming X - Network Gaming Priority & Latency Telemetry Engine (v3.0 - Zero netpolicy disruption)
 
 network_detect_transport() {

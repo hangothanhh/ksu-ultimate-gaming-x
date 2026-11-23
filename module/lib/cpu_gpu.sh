@@ -1,4 +1,5 @@
 #!/system/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
 # KSU Ultimate Gaming X - Sustained Anti-Lag CPU, GPU (Adreno/Mali/Exynos Xclipse), Bus & I/O Optimizer
 
 # Picks the nearest real frequency in <avail_file> at <pct>% of the available steps

@@ -1,4 +1,5 @@
 #!/system/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
 # KSU Ultimate Gaming X - post-fs-data stage (v1.0.0)
 # Must remain fast (<200ms) and safe. Handles bootloop guard & safe whole-system spoof.
 

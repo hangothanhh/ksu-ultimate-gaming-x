@@ -1,4 +1,5 @@
 #!/system/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
 # KSU Ultimate Gaming X v3.0 - Smart Adaptive Thermal Engine + Sustained Anti-Lag Relief
 
 thermal_normalize_c() {

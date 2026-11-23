@@ -1,4 +1,5 @@
 #!/system/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
 # KSU Ultimate Gaming X - Module Installer Script (v1.0.0)
 
 KGX_DATA_DIR="${KGX_DATA_DIR:-/data/adb/ksu_gaming_x}"

@@ -1,4 +1,5 @@
 #!/system/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
 # KSU Ultimate Gaming X - Whole-System Persistent Spoof Engine + Play Integrity Shield
 
 SPOOF_SAFE_PROPS="

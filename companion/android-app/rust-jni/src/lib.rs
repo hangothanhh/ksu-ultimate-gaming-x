@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // KSU Ultimate Gaming X v1.0.0 - Standalone App Rust JNI Bridge (aarch64-linux-android)
 // Pure std Rust, zero external crates. Maintains a persistent `su` root shell pipe
 // for <5ms telemetry/control latency + invokes compiled ARM64 `kgx-core` directly.

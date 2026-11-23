@@ -1,4 +1,5 @@
 #!/system/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
 # KSU Ultimate Gaming X - Hardware-Aware Device Profile & Game Matcher (Low-Fork POSIX)
 
 # Output: 15-field TSV row for profile_id (custom profiles take precedence over built-in)

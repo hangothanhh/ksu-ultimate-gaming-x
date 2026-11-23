@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /*
  * KSU Ultimate Gaming X v1.0.0 - Stock-Identity Shield (Zygisk API v4)
  *

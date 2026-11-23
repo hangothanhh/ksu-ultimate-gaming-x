@@ -1,4 +1,5 @@
 #!/sbin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
 # Standard KernelSU / Magisk recovery-compatible installer stub
 umask 022
 

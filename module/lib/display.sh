@@ -1,4 +1,5 @@
 #!/system/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
 # KSU Ultimate Gaming X - Dynamic Display Refresh Rate Engine
 
 display_sanitize_hz_val() {

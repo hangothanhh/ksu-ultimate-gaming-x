@@ -1,4 +1,5 @@
 #!/system/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
 # KSU Ultimate Gaming X v3.3 - Safe Reversible Samsung GOS Neutralizer
 
 GOS_PKG="com.samsung.android.game.gos"

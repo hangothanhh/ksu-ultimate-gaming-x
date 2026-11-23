@@ -1,4 +1,5 @@
 #!/system/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
 # KSU Ultimate Gaming X - JSON Control CLI (v1.0.0) for Rust App & Root Terminal
 
 SCRIPT_DIR="${0%/*}"

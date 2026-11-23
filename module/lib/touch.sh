@@ -1,4 +1,5 @@
 #!/system/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
 # KSU Ultimate Gaming X - Touch & Input Latency Optimizer (Kernel-Dependent)
 
 touch_apply() {

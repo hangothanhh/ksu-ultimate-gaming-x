@@ -1,4 +1,5 @@
 #!/system/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
 # KSU Ultimate Gaming X - late_start service stage (v1.0.0)
 
 MODDIR="${0%/*}"
