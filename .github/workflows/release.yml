@@ -1,0 +1,108 @@
+name: Release Draft Builder
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release-draft:
+    name: Build Signed APK & Module ZIP Draft Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
+      - name: Set up Temurin JDK 17
+        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Rust ARM64 & Android SDK/NDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustup target add aarch64-linux-android
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          SDKMGR="$(command -v sdkmanager || ls "$SDK"/cmdline-tools/*/bin/sdkmanager | head -n 1)"
+          PKGS=()
+          [ -f "$SDK/platforms/android-34/android.jar" ] || PKGS+=("platforms;android-34")
+          [ -f "$SDK/build-tools/34.0.0/aapt2" ] || PKGS+=("build-tools;34.0.0")
+          if [ ! -d "$SDK/ndk" ] || [ -z "$(find "$SDK/ndk" -maxdepth 6 -name 'aarch64-linux-android29-clang++' 2>/dev/null | head -n 1)" ]; then
+            PKGS+=("ndk;29.0.14206865")
+          fi
+          if [ ${#PKGS[@]} -gt 0 ]; then
+            yes | "$SDKMGR" --licenses >/dev/null || true
+            "$SDKMGR" "${PKGS[@]}"
+          fi
+          NDK_DIR="$(find "$SDK/ndk" -maxdepth 6 -name 'aarch64-linux-android29-clang++' 2>/dev/null | head -n 1 | sed 's|/toolchains/.*||')"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_HOME=$NDK_DIR" >> "$GITHUB_ENV"
+
+      - name: Compile Rust ARM64 & Zygisk Binaries
+        run: python3 -u scripts/build_rust.py
+
+      - name: Build Display Helper DEX & Companion APK
+        env:
+          KGX_KEYSTORE_BASE64: ${{ secrets.KGX_KEYSTORE_BASE64 }}
+          KGX_KEYSTORE_PASS: ${{ secrets.KGX_KEYSTORE_PASS }}
+          KGX_KEY_PASS: ${{ secrets.KGX_KEY_PASS }}
+          KGX_KEY_ALIAS: ${{ secrets.KGX_KEY_ALIAS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${KGX_KEYSTORE_BASE64:-}" ]; then
+            printf '%s' "$KGX_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+            export KGX_KEYSTORE_PATH="$RUNNER_TEMP/release.keystore"
+          fi
+          python3 -u scripts/build_apk.py
+
+      - name: Clean Temporary Signing Keystore
+        if: always()
+        shell: bash
+        run: rm -f "$RUNNER_TEMP/release.keystore"
+
+      - name: Package KernelSU Module ZIP
+        run: python3 -u scripts/build_zip.py
+
+      - name: Run Full 7-Stage Verification
+        run: python3 -u tests/verify_all.py
+
+      - name: Create Draft GitHub Release on Tag Push
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          {
+            echo "# KSU Ultimate Gaming X ${TAG}"
+            echo ""
+            echo "Built from clean source on \`ubuntu-latest\` and verified across all 7 test stages."
+            echo ""
+            echo "## SHA-256 Checksums"
+            echo '```text'
+            cat dist/KSU-Ultimate-Gaming-X-*.sha256
+            echo '```'
+          } > "$RUNNER_TEMP/release_notes.md"
+          gh release create "$TAG" \
+            dist/KSU-Ultimate-Gaming-X-*.zip \
+            dist/KSU-Ultimate-Gaming-X-*.zip.sha256 \
+            dist/KSU-Ultimate-Gaming-X-*.apk \
+            dist/KSU-Ultimate-Gaming-X-*.apk.sha256 \
+            --draft \
+            --title "KSU Ultimate Gaming X ${TAG}" \
+            --notes-file "$RUNNER_TEMP/release_notes.md"

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Standalone SDK APK builder for KSU Gaming X v1.0.0 (Zero Gradle; aapt2 + javac + d8 + zipalign + apksigner)."""
 
 from __future__ import annotations
@@ -13,22 +14,76 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+IS_WIN = os.name == "nt"
 APP_DIR = ROOT / "companion" / "android-app"
 HELPER_DIR = ROOT / "companion" / "display-helper"
 MODULE_DATA_DIR = ROOT / "module" / "data"
 DIST_DIR = ROOT / "dist"
 APK_NAME = "KSU-Ultimate-Gaming-X-v1.0.0.apk"
 
-SDK_ROOT = Path(os.environ.get("ANDROID_SDK_ROOT") or os.environ.get("ANDROID_HOME") or r"C:\Android\sdk")
-BUILD_TOOLS = SDK_ROOT / "build-tools" / "34.0.0"
-PLATFORM_JAR = SDK_ROOT / "platforms" / "android-34" / "android.jar"
 
-AAPT2 = BUILD_TOOLS / "aapt2.exe"
-D8 = BUILD_TOOLS / "d8.bat"
-ZIPALIGN = BUILD_TOOLS / "zipalign.exe"
-APKSIGNER = BUILD_TOOLS / "apksigner.bat"
-JAVAC = Path(os.environ.get("JAVA_HOME", r"C:\Program Files\Microsoft\jdk-17.0.21.21-hotspot")) / "bin" / "javac.exe"
-KEYTOOL = Path(os.environ.get("JAVA_HOME", r"C:\Program Files\Microsoft\jdk-17.0.21.21-hotspot")) / "bin" / "keytool.exe"
+def find_sdk_root() -> Path:
+    for val in (
+        os.environ.get("ANDROID_SDK_ROOT"),
+        os.environ.get("ANDROID_HOME"),
+        r"C:\Android\sdk" if IS_WIN else None,
+        str(Path.home() / "Android" / "Sdk"),
+        "/usr/local/lib/android/sdk",
+    ):
+        if val and Path(val).is_dir():
+            return Path(val)
+    return Path(r"C:\Android\sdk" if IS_WIN else "/usr/local/lib/android/sdk")
+
+
+def find_build_tools(sdk_root: Path) -> Path:
+    bt_root = sdk_root / "build-tools"
+    pref = bt_root / "34.0.0"
+    aapt2_name = "aapt2.exe" if IS_WIN else "aapt2"
+    if (pref / aapt2_name).is_file():
+        return pref
+    if bt_root.is_dir():
+        for child in sorted(bt_root.iterdir(), reverse=True):
+            if (child / aapt2_name).is_file():
+                return child
+    return pref
+
+
+def find_platform_jar(sdk_root: Path) -> Path:
+    plat_root = sdk_root / "platforms"
+    pref = plat_root / "android-34" / "android.jar"
+    if pref.is_file():
+        return pref
+    if plat_root.is_dir():
+        for child in sorted(plat_root.iterdir(), reverse=True):
+            jar = child / "android.jar"
+            if jar.is_file():
+                return jar
+    return pref
+
+
+def find_java_tool(tool_name: str) -> Path:
+    ext = ".exe" if IS_WIN else ""
+    java_home = os.environ.get("JAVA_HOME") or (r"C:\Program Files\Microsoft\jdk-17.0.21.21-hotspot" if IS_WIN else "")
+    if java_home:
+        candidate = Path(java_home) / "bin" / f"{tool_name}{ext}"
+        if candidate.is_file():
+            return candidate
+    found = shutil.which(tool_name)
+    if found:
+        return Path(found)
+    return Path(java_home or ".") / "bin" / f"{tool_name}{ext}"
+
+
+SDK_ROOT = find_sdk_root()
+BUILD_TOOLS = find_build_tools(SDK_ROOT)
+PLATFORM_JAR = find_platform_jar(SDK_ROOT)
+
+AAPT2 = BUILD_TOOLS / ("aapt2.exe" if IS_WIN else "aapt2")
+D8 = BUILD_TOOLS / ("d8.bat" if IS_WIN else "d8")
+ZIPALIGN = BUILD_TOOLS / ("zipalign.exe" if IS_WIN else "zipalign")
+APKSIGNER = BUILD_TOOLS / ("apksigner.bat" if IS_WIN else "apksigner")
+JAVAC = find_java_tool("javac")
+KEYTOOL = find_java_tool("keytool")
 
 # Local development debug keystore fallback only (ignored in .gitignore).
 # For custom release signing, set KGX_KEYSTORE_PATH / KGX_KEYSTORE_PASS / KGX_KEY_PASS / KGX_KEY_ALIAS.
@@ -199,6 +254,17 @@ def build_apk() -> Path:
             zi_so = zipfile.ZipInfo("lib/arm64-v8a/libkgx_rust.so", date_time=(2026, 11, 22, 0, 0, 0))
             zi_so.compress_type = zipfile.ZIP_STORED
             zout.writestr(zi_so, jni_so.read_bytes())
+
+            for legal_name in ("LICENSE", "NOTICE"):
+                legal_path = ROOT / legal_name
+                if not legal_path.is_file():
+                    raise RuntimeError(f"Required legal file missing for APK assets: {legal_path}")
+                raw_legal = legal_path.read_bytes().replace(b"\r\n", b"\n")
+                if raw_legal.startswith(b"\xef\xbb\xbf"):
+                    raw_legal = raw_legal[3:]
+                zi_legal = zipfile.ZipInfo(f"assets/{legal_name}", date_time=(2026, 11, 22, 0, 0, 0))
+                zi_legal.compress_type = zipfile.ZIP_DEFLATED
+                zout.writestr(zi_legal, raw_legal)
 
         # 6. Align (4-byte page alignment before signing)
         run([zipalign, "-f", "-p", "4", str(unsigned_apk), str(aligned_apk)])

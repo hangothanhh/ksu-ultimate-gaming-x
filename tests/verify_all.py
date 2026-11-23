@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Comprehensive 7-stage verification suite for KSU Ultimate Gaming X v1.0.0."""
 
 from __future__ import annotations
@@ -25,7 +26,35 @@ DIST_ZIP_SHA = ROOT / "dist" / "KSU-Ultimate-Gaming-X-v1.0.0.zip.sha256"
 DIST_APK = ROOT / "dist" / "KSU-Ultimate-Gaming-X-v1.0.0.apk"
 DIST_APK_SHA = ROOT / "dist" / "KSU-Ultimate-Gaming-X-v1.0.0.apk.sha256"
 IS_WIN = os.name == "nt"
-APKSIGNER = Path(shutil.which("apksigner") or r"C:\Android\sdk\build-tools\34.0.0\apksigner.bat")
+
+
+def find_apksigner() -> Path:
+    found = shutil.which("apksigner")
+    if found:
+        return Path(found)
+    name = "apksigner.bat" if IS_WIN else "apksigner"
+    for val in (
+        os.environ.get("ANDROID_SDK_ROOT"),
+        os.environ.get("ANDROID_HOME"),
+        r"C:\Android\sdk" if IS_WIN else None,
+        str(Path.home() / "Android" / "Sdk"),
+        "/usr/local/lib/android/sdk",
+    ):
+        if not val:
+            continue
+        bt = Path(val) / "build-tools"
+        pref = bt / "34.0.0" / name
+        if pref.is_file():
+            return pref
+        if bt.is_dir():
+            for child in sorted(bt.iterdir(), reverse=True):
+                cand = child / name
+                if cand.is_file():
+                    return cand
+    return Path(r"C:\Android\sdk\build-tools\34.0.0\apksigner.bat" if IS_WIN else "apksigner")
+
+
+APKSIGNER = find_apksigner()
 SH_BIN = r"C:\Program Files\Git\bin\sh.exe" if IS_WIN and Path(r"C:\Program Files\Git\bin\sh.exe").is_file() else (shutil.which("sh") or "/bin/sh")
 
 
@@ -1210,6 +1239,7 @@ def stage_6_zip_audit() -> None:
             "lib/power.sh", "lib/gos.sh", "lib/freezer.sh", "data/kgx-display.dex",
             "META-INF/com/google/android/update-binary",
             "data/devices.tsv", "data/games.tsv", "zygisk/arm64-v8a.so",
+            "LICENSE", "NOTICE",
         ]:
             assert_true(req in names, f"Missing required ZIP root entry: {req}")
 
@@ -1267,7 +1297,7 @@ def stage_7_apk_audit() -> None:
         bad = zf.testzip()
         assert_true(bad is None, f"APK ZIP CRC failure on: {bad}")
         names = set(zf.namelist())
-        for req in ["AndroidManifest.xml", "resources.arsc", "classes.dex", "lib/arm64-v8a/libkgx_rust.so"]:
+        for req in ["AndroidManifest.xml", "resources.arsc", "classes.dex", "lib/arm64-v8a/libkgx_rust.so", "assets/LICENSE", "assets/NOTICE"]:
             assert_true(req in names, f"Missing required APK entry: {req}")
         assert_true(zf.getinfo("resources.arsc").compress_type == zipfile.ZIP_STORED, "resources.arsc must be STORED")
         assert_true(zf.getinfo("lib/arm64-v8a/libkgx_rust.so").compress_type == zipfile.ZIP_STORED, "libkgx_rust.so must be STORED")
@@ -1278,9 +1308,9 @@ def stage_7_apk_audit() -> None:
         assert_true(b"Java_com_kgx_ultimate_RustBridge_nativeCheckRoot" in so, "Missing JNI symbol nativeCheckRoot in libkgx_rust.so")
         assert_true(b"Rust Core v1.0.0" in so, "Missing v1.0.0 string in libkgx_rust.so")
 
-    if APKSIGNER.is_file():
-        res = subprocess.run([str(APKSIGNER), "verify", str(DIST_APK)], capture_output=True, text=True)
-        assert_true(res.returncode == 0, f"apksigner verify failed: {res.stdout}\n{res.stderr}")
+    assert_true(APKSIGNER.is_file(), f"apksigner not found for Stage 7 verification: {APKSIGNER}")
+    res = subprocess.run([str(APKSIGNER), "verify", str(DIST_APK)], capture_output=True, text=True)
+    assert_true(res.returncode == 0, f"apksigner verify failed: {res.stdout}\n{res.stderr}")
 
     print(f"[PASS] Stage 7: Signed Rust Companion APK, JNI ARM64 ELF & SHA256 verified ({DIST_APK.name}).")
 

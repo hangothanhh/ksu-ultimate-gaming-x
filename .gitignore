@@ -19,3 +19,9 @@ companion/**/build/
 *.tmp
 .DS_Store
 Thumbs.db
+
+# Compiled native & DEX binaries (built from source via scripts/build_rust.py & scripts/build_apk.py)
+module/bin/kgx-core
+module/zygisk/arm64-v8a.so
+module/data/kgx-display.dex
+companion/android-app/jniLibs/arm64-v8a/libkgx_rust.so
