@@ -213,15 +213,20 @@ ksu-ultimate-gaming-x/
 ├── README.md                          # Tài liệu tổng quan tiếng Anh (chính)
 ├── README.vi.md                       # Tài liệu tổng quan tiếng Việt
 ├── CHANGELOG.md                       # Lịch sử phiên bản chính thức
+├── CODE_OF_CONDUCT.md                 # Quy tắc ứng xử cộng đồng (EN; VI ở docs/vi/)
 ├── CONTRIBUTING.md                    # Quy chuẩn đóng góp & chính sách chống AI slop
 ├── LICENSE                            # Giấy phép GNU GPL v3.0+ (GPL-3.0-or-later)
-├── NOTICE                             # Ghi công bên thứ ba & minh bạch AI
+├── NOTICE                             # Ghi công bên thứ ba, toolchain & minh bạch AI
 ├── AI_CONTRIBUTIONS.md                # Công bố minh bạch đóng góp của Google Antigravity
 ├── SECURITY.md                        # Chính sách bảo mật & ranh giới an toàn root
-├── .gitignore                         # Loại trừ keystore, dist/, system.prop, cache build
+├── update.json                        # Feed kiểm tra cập nhật OTA của KernelSU Manager
+├── .gitattributes                     # Chuẩn EOL LF cho text/script & quy tắc binary
+├── .gitignore                         # Loại trừ binary biên dịch, keystore, dist/, system.prop
 ├── .editorconfig                      # Chuẩn UTF-8 & LF
 ├── .github/
-│   ├── workflows/ci.yml               # GitHub Actions kiểm tra ZIP + Stages 1-6 (--skip-apk)
+│   ├── workflows/
+│   │   ├── ci.yml                     # CI ghim SHA: build từ source + kiểm thử cả 7 stage
+│   │   └── release.yml                # Tự tạo Draft Release (ZIP + APK) từ source khi gắn tag
 │   ├── ISSUE_TEMPLATE/                # Bug Report, Feature Request, Compatibility Report
 │   └── PULL_REQUEST_TEMPLATE.md       # Mẫu PR có mục kiểm tra AI & rollback
 ├── docs/                              # Tài liệu chuyên sâu từng phân hệ
@@ -235,8 +240,8 @@ ksu-ultimate-gaming-x/
 │   ├── troubleshooting.md
 │   ├── development.md
 │   └── vi/                            # Bản dịch tiếng Việt của bộ docs/
-├── module/                            # Lõi KernelSU module (POSIX sh + ARM64 binaries)
-│   ├── module.prop                    # Metadata module (v1.0.0 / versionCode=100)
+├── module/                            # Lõi KernelSU module (POSIX sh + output ARM64/DEX lúc build)
+│   ├── module.prop                    # Metadata module (v1.0.0 / versionCode=100, author=hangothanhh)
 │   ├── post-fs-data.sh                # Bootloop guard & safe global spoof lúc boot sớm
 │   ├── service.sh                     # Khôi phục crash/reboot & khởi chạy daemon nền
 │   ├── action.sh                      # Nút Action nhanh trong KernelSU Manager
@@ -244,22 +249,22 @@ ksu-ultimate-gaming-x/
 │   ├── uninstall.sh                   # Hoàn nguyên toàn bộ hệ thống khi gỡ
 │   ├── bin/
 │   │   ├── kgxctl                     # CLI điều khiển JSON & xuất chẩn đoán diag
-│   │   ├── kgx-core                   # Daemon & bộ đọc telemetry Rust AArch64
+│   │   ├── kgx-core                   # Biên dịch lúc build từ companion/rust-core/
 │   │   └── gaming_daemon.sh           # Wrapper daemon & fallback POSIX
 │   ├── lib/                           # 16 thư viện module POSIX sh
-│   ├── data/                          # devices.tsv/json, games.tsv/json, default_global.conf, kgx-display.dex
-│   └── zygisk/arm64-v8a.so            # Thư viện Zygisk Stock-Identity & Denylist Shield
+│   ├── data/                          # devices.tsv/json, games.tsv/json, default_global.conf, kgx-display.dex lúc build
+│   └── zygisk/                        # Thư viện arm64-v8a.so biên dịch từ companion/zygisk-spoof/
 ├── companion/
 │   ├── rust-core/src/main.rs          # Mã nguồn daemon Rust native
 │   ├── zygisk-spoof/                  # Mã nguồn C++17 Zygisk API v4 & header zygisk.hpp
 │   ├── display-helper/                # DisplayPowerCtrl.java cho kgx-display.dex
 │   └── android-app/                   # Companion Android APK (Java + Material 3 + Rust JNI)
 ├── scripts/
-│   ├── build_rust.py                  # Biên dịch kgx-core, zygisk arm64-v8a.so, libkgx_rust.so
-│   ├── build_apk.py                   # Build DEX & ký Companion APK (không cần Gradle)
-│   └── build_zip.py                   # Đóng gói deterministic ZIP chuẩn UNIX LF/quyền hạn
+│   ├── build_rust.py                  # Biên dịch chéo OS: kgx-core, arm64-v8a.so, libkgx_rust.so
+│   ├── build_apk.py                   # Build DEX, Companion APK chéo OS + nhúng LICENSE/NOTICE
+│   └── build_zip.py                   # Đóng gói deterministic ZIP kèm LICENSE & NOTICE
 └── tests/
-    └── verify_all.py                  # Bộ kiểm thử tự động 7 stage (hỗ trợ --skip-apk trên CI)
+    └── verify_all.py                  # Bộ kiểm thử tự động 7 stage (hỗ trợ Windows & Linux)
 ```
 
 ### Lệnh Build & Kiểm thử nhanh
@@ -279,7 +284,7 @@ python -u tests/verify_all.py
 - **Đóng góp (Credits / Contributions)**:
   - Maintainer chính: `hangothanhh` (thiết kế, kiểm chứng thực tế trên phần cứng thật và bảo trì dự án).
   - Hỗ trợ phát triển: **Google Antigravity** (hỗ trợ mã nguồn, kiểm thử và tài liệu — xem chi tiết tại **[AI_CONTRIBUTIONS.md](docs/vi/AI_CONTRIBUTIONS.md)**).
-- **Quy chuẩn PR**: Xem **[CONTRIBUTING.md](docs/vi/CONTRIBUTING.md)** (chú ý quy tắc bắt buộc về minh bạch AI và chống *AI slop*).
+- **Quy chuẩn PR & Quy tắc Ứng xử**: Xem **[CONTRIBUTING.md](docs/vi/CONTRIBUTING.md)** và **[CODE_OF_CONDUCT.md](docs/vi/CODE_OF_CONDUCT.md)** (chú ý quy tắc bắt buộc về minh bạch AI và chống *AI slop*).
 - **Chính sách bảo mật**: Xem **[SECURITY.md](docs/vi/SECURITY.md)**.
 - **Giấy phép**: Phát hành theo **[GNU General Public License v3.0 hoặc mới hơn (`GPL-3.0-or-later`)](LICENSE)** — Copyright (C) 2026 `hangothanhh`.
 - **Ghi công & Nguồn bên thứ ba**: Xem **[NOTICE](NOTICE)** (bao gồm header public Zygisk API v4 trong `companion/zygisk-spoof/include/zygisk.hpp` — Copyright 2022–2023 John "topjohnwu" Wu).

@@ -12,7 +12,7 @@ Derived from [scripts/build_rust.py](../scripts/build_rust.py), [scripts/build_a
 
 | Component | Verified Requirement | Notes |
 |---|---|---|
-| **Operating System** | Windows 10/11 *(full build + 7 stages)*; Linux `ubuntu-latest` *(ZIP build + CI Stages 1–6)* | `build_rust.py` / `build_apk.py` default to Windows paths (with SDK/Java env overrides) |
+| **Operating System** | Windows 10/11, Linux (`ubuntu-latest`), or macOS *(full build + all 7 stages)* | `build_rust.py`, `build_apk.py`, and `verify_all.py` auto-detect host NDK/SDK/JDK paths |
 | **Python** | Python 3.12+ | Standard library only (zero pip dependencies) |
 | **Rust Toolchain** | `rustc` with `aarch64-linux-android` target | Pure `std`, zero external crates |
 | **Android NDK** | NDK `29.0.14206865` (`aarch64-linux-android29-clang`, `clang++`, `llvm-strip`) | Links C++ Zygisk with `-static-libstdc++ -llog -ldl` |
@@ -86,5 +86,5 @@ Outputs:
 
 ---
 
-## 4. Note for Linux Cross-Compilation
-Default NDK/SDK/JDK paths inside `build_rust.py` (`.cmd`/`.exe`) and `build_apk.py` (`*.bat`/`.exe`) target the maintainer's Windows host. On Linux, adjust tool binary names without `.cmd`/`.bat`/`.exe` extensions, or rely on GitHub Actions CI for Module ZIP packaging and Stages 1–6 (`--skip-apk`).
+## 4. Reproducible CI Builds (Linux `ubuntu-latest`)
+Both `.github/workflows/ci.yml` and `.github/workflows/release.yml` automatically install/locate `aarch64-linux-android` Rust target, Android SDK `android-34` / `build-tools;34.0.0`, and Android NDK, then run `build_rust.py` → `build_apk.py` → `build_zip.py` → `verify_all.py` (all 7 stages) cleanly from source with zero prebuilt binaries committed in Git.

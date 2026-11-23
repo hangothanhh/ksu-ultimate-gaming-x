@@ -215,15 +215,20 @@ ksu-ultimate-gaming-x/
 ├── README.md                          # English primary documentation
 ├── README.vi.md                       # Vietnamese documentation mirror
 ├── CHANGELOG.md                       # Release changelog (EN; VI under docs/vi/)
+├── CODE_OF_CONDUCT.md                 # Community Code of Conduct
 ├── CONTRIBUTING.md                    # Contributing rules & anti-AI-slop policy
 ├── LICENSE                            # GNU GPL v3.0 or later (GPL-3.0-or-later)
-├── NOTICE                             # Third-party notices & AI transparency
+├── NOTICE                             # Third-party notices, toolchain licenses & AI transparency
 ├── AI_CONTRIBUTIONS.md                # Google Antigravity contribution disclosure
 ├── SECURITY.md                        # Security policy & root safety boundaries
-├── .gitignore                         # Ignores keystores, dist/, system.prop, caches
+├── update.json                        # KernelSU Manager OTA update feed
+├── .gitattributes                     # Enforces LF for text/scripts & binary rules
+├── .gitignore                         # Ignores built binaries, keystores, dist/, system.prop
 ├── .editorconfig                      # UTF-8 & LF normalization
 ├── .github/
-│   ├── workflows/ci.yml               # GitHub Actions CI (ZIP build + Stages 1-6)
+│   ├── workflows/
+│   │   ├── ci.yml                     # SHA-pinned CI: compiles from source + runs all 7 stages
+│   │   └── release.yml                # Tag release builder (ZIP + APK drafts from source)
 │   ├── ISSUE_TEMPLATE/                # Bug Report, Feature Request, Compatibility Report
 │   └── PULL_REQUEST_TEMPLATE.md       # PR checklist with AI & rollback verification
 ├── docs/                              # Detailed English guides (mirrors under docs/vi/)
@@ -237,8 +242,8 @@ ksu-ultimate-gaming-x/
 │   ├── troubleshooting.md
 │   ├── development.md
 │   └── vi/                            # Vietnamese mirrors of docs & root guides
-├── module/                            # KernelSU module core (POSIX sh + ARM64 ELF/DEX)
-│   ├── module.prop                    # Module metadata (v1.0.0 / versionCode=100)
+├── module/                            # KernelSU module core (POSIX sh + generated ARM64/DEX outputs)
+│   ├── module.prop                    # Module metadata (v1.0.0 / versionCode=100, author=hangothanhh)
 │   ├── post-fs-data.sh                # Bootloop guard & early-boot safe spoof
 │   ├── service.sh                     # Crash/reboot recovery & daemon startup
 │   ├── action.sh                      # KernelSU Manager quick Action rollback
@@ -246,22 +251,22 @@ ksu-ultimate-gaming-x/
 │   ├── uninstall.sh                   # Complete system state restoration
 │   ├── bin/
 │   │   ├── kgxctl                     # JSON control CLI & redacted kgxctl diag
-│   │   ├── kgx-core                   # Native AArch64 Rust daemon & telemetry engine
+│   │   ├── kgx-core                   # Built at build time from companion/rust-core/
 │   │   └── gaming_daemon.sh           # Daemon wrapper & POSIX fallback
 │   ├── lib/                           # 16 POSIX shell library modules
-│   ├── data/                          # devices.tsv/json, games.tsv/json, default_global.conf, kgx-display.dex
-│   └── zygisk/arm64-v8a.so            # Zygisk Stock-Identity & Denylist Shield
+│   ├── data/                          # devices.tsv/json, games.tsv/json, default_global.conf, built kgx-display.dex
+│   └── zygisk/                        # Built arm64-v8a.so from companion/zygisk-spoof/
 ├── companion/
 │   ├── rust-core/src/main.rs          # Native Rust daemon source
 │   ├── zygisk-spoof/                  # C++17 Zygisk API v4 source & zygisk.hpp header
 │   ├── display-helper/                # DisplayPowerCtrl.java -> kgx-display.dex
 │   └── android-app/                   # Standalone Android APK (Java + Material 3 + Rust JNI)
 ├── scripts/
-│   ├── build_rust.py                  # Compiles kgx-core, zygisk arm64-v8a.so, libkgx_rust.so
-│   ├── build_apk.py                   # Compiles DEX & signs Companion APK (Zero Gradle)
-│   └── build_zip.py                   # Deterministic ZIP packager (UNIX LF & permissions)
+│   ├── build_rust.py                  # Cross-platform compiler for kgx-core, arm64-v8a.so, libkgx_rust.so
+│   ├── build_apk.py                   # Cross-platform DEX & Companion APK builder + LICENSE/NOTICE assets
+│   └── build_zip.py                   # Deterministic ZIP packager bundling LICENSE & NOTICE
 └── tests/
-    └── verify_all.py                  # Automated 7-stage verification suite (--skip-apk for CI)
+    └── verify_all.py                  # Automated 7-stage verification suite (cross-platform)
 ```
 
 ### Quick Build & Test Commands
@@ -281,7 +286,7 @@ python -u tests/verify_all.py
 - **Credits / Contributions**:
   - Lead Maintainer: `hangothanhh` (project ownership, real hardware testing, verification & releases).
   - Development Assistance: **Google Antigravity** (architecture, source implementation, automated test suite & documentation — see **[AI_CONTRIBUTIONS.md](AI_CONTRIBUTIONS.md)**).
-- **Contributing Guidelines**: Read **[CONTRIBUTING.md](CONTRIBUTING.md)** (includes mandatory AI transparency and Anti-AI-Slop rules).
+- **Contributing & Code of Conduct**: Read **[CONTRIBUTING.md](CONTRIBUTING.md)** and **[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)** (includes mandatory AI transparency and Anti-AI-Slop rules).
 - **Security Policy**: Read **[SECURITY.md](SECURITY.md)**.
 - **License**: Distributed under **[GNU General Public License v3.0 or later (`GPL-3.0-or-later`)](LICENSE)** — Copyright (C) 2026 `hangothanhh`.
 - **Third-Party Attribution**: See **[NOTICE](NOTICE)** (includes public Zygisk API v4 header `companion/zygisk-spoof/include/zygisk.hpp` — Copyright 2022–2023 John "topjohnwu" Wu). All product/SoC/device/game names appear solely for technical compatibility identification and imply no official affiliation or endorsement.

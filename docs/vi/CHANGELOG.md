@@ -6,13 +6,22 @@ Mọi thay đổi đáng chú ý của dự án **KSU Ultimate Gaming X** đều
 
 ---
 
-## [Unreleased] (Post-v1.0.0 Governance Update)
+## [Unreleased] (Post-v1.0.0 Governance & Reproducible Build Update)
+
+### Added
+- Bổ sung `CODE_OF_CONDUCT.md` (+ `docs/vi/CODE_OF_CONDUCT.md`), `.gitattributes`, `update.json` (cho KernelSU Manager) và workflow tạo Draft Release `.github/workflows/release.yml`.
+- Gắn `SPDX-License-Identifier: GPL-3.0-or-later` vào toàn bộ 43 tệp mã nguồn tự viết (giữ nguyên vẹn `companion/zygisk-spoof/include/zygisk.hpp`).
+- Đóng gói kèm `LICENSE` và `NOTICE` trực tiếp vào trong Module ZIP và `assets/` của Companion APK (kiểm tra tự động ở Stage 6–7).
 
 ### Changed
-- Chuyển giấy phép mã nguồn của repository trên nhánh `main` từ MIT sang **GNU General Public License v3.0 hoặc mới hơn (`GPL-3.0-or-later`)** kể từ commit cập nhật giấy phép (bản phát hành nhị phân `v1.0.0` giữ nguyên số hiệu, mã nguồn/tài liệu đồng bộ theo `GPL-3.0-or-later`).
+- Chuyển giấy phép mã nguồn của repository trên nhánh `main` từ MIT sang **GNU General Public License v3.0 hoặc mới hơn (`GPL-3.0-or-later`)**; bổ sung giấy phép runtime liên kết tĩnh (`Rust std`, `LLVM libc++`) trong `NOTICE` và `author=hangothanhh` + `updateJson` trong `module/module.prop`.
 - Bổ sung ghi nhận đóng góp của **Google Antigravity** trong `README.md`, `NOTICE` và `AI_CONTRIBUTIONS.md` (chỉ ghi nhận trong tài liệu, không gắn `Co-authored-by:` bot trong Git commit).
 - Đặt **tiếng Anh** làm ngôn ngữ tài liệu chính (`README.md`, `docs/*.md`, templates `.github/`), lưu bản tiếng Việt đầy đủ tại `README.vi.md` và `docs/vi/`.
 - Đồng bộ `companion/zygisk-spoof/README.md` với mã nguồn Stock-Identity & Denylist Shield (`KGX_PIShield`, `spoof_denylist.list`).
+- Nâng cấp `build_rust.py`, `build_apk.py`, `tests/verify_all.py` hỗ trợ **build chéo nền tảng Windows + Linux/macOS** và **gỡ bỏ hoàn toàn 4 tệp binary dựng sẵn khỏi Git** để CI tự biên dịch 100% từ mã nguồn.
+
+### Security
+- Nâng cấp `.github/workflows/ci.yml` để biên dịch sạch Rust/Zygisk/APK/ZIP từ source trên `ubuntu-latest`, chạy đủ cả 7 stage, chặn file nhị phân/keystore trong Git và ghim toàn bộ GitHub Actions theo commit SHA (Node 24).
 
 ---
 

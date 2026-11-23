@@ -6,13 +6,22 @@ All notable changes to **KSU Ultimate Gaming X** are documented in this file bas
 
 ---
 
-## [Unreleased] (Post-v1.0.0 Governance & Documentation Update)
+## [Unreleased] (Post-v1.0.0 Governance & Reproducible Build Update)
+
+### Added
+- Added [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) (+ [docs/vi/CODE_OF_CONDUCT.md](docs/vi/CODE_OF_CONDUCT.md)), [.gitattributes](.gitattributes), KernelSU Manager OTA feed [update.json](update.json), and tag-triggered draft workflow `.github/workflows/release.yml`.
+- Added `SPDX-License-Identifier: GPL-3.0-or-later` headers across all 43 project-authored source files (preserving [companion/zygisk-spoof/include/zygisk.hpp](companion/zygisk-spoof/include/zygisk.hpp) unmodified).
+- Bundled `LICENSE` and `NOTICE` directly inside both `KSU-Ultimate-Gaming-X-v1.0.0.zip` and Companion APK `assets/` via `build_zip.py` / `build_apk.py` (enforced by `tests/verify_all.py` Stages 6–7).
 
 ### Changed
-- Switched repository license on `main` from MIT to **GNU General Public License v3.0 or later (`GPL-3.0-or-later`)** while keeping release binary version `v1.0.0` unchanged.
+- Switched repository license on `main` from MIT to **GNU General Public License v3.0 or later (`GPL-3.0-or-later`)** while keeping release binary version `v1.0.0` unchanged; updated [NOTICE](NOTICE) with static toolchain runtime licenses (`MIT OR Apache-2.0` for Rust `std`, `Apache-2.0 WITH LLVM-exception` for NDK `libc++`) and `module/module.prop` (`author=hangothanhh`, `updateJson`).
 - Credited **Google Antigravity**'s documentation and engineering assistance inside [README.md](README.md), [NOTICE](NOTICE), and [AI_CONTRIBUTIONS.md](AI_CONTRIBUTIONS.md) (documentation-only attribution without Git bot `Co-authored-by:` trailers).
 - Promoted **English** as the primary documentation language across root files, `docs/*.md`, and `.github/` templates, with full Vietnamese translations preserved under [README.vi.md](README.vi.md) and `docs/vi/`.
 - Aligned [companion/zygisk-spoof/README.md](companion/zygisk-spoof/README.md) with the actual Stock-Identity & Denylist Shield implementation (`KGX_PIShield`, `spoof_denylist.list`).
+- Made [scripts/build_rust.py](scripts/build_rust.py), [scripts/build_apk.py](scripts/build_apk.py), and [tests/verify_all.py](tests/verify_all.py) cross-platform across Windows and Linux/macOS, and **removed all 4 prebuilt ARM64/DEX binaries from Git tracking** in favor of clean from-source compilation in CI.
+
+### Security
+- Hardened `.github/workflows/ci.yml` to compile Rust, Zygisk C++, Display DEX, APK, and ZIP cleanly from source on `ubuntu-latest`, run all 7 verification stages, enforce zero committed binaries/keys, and pin all third-party GitHub Actions (Node 24 releases) by exact commit SHA.
 
 ---
 

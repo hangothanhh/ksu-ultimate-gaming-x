@@ -12,7 +12,7 @@ Dựa theo [scripts/build_rust.py](../../scripts/build_rust.py), [scripts/build_
 
 | Thành phần | Yêu cầu đã kiểm chứng | Ghi chú |
 |---|---|---|
-| **Hệ điều hành** | Windows 10/11 *(full build + 7 stages)*; Linux (`ubuntu-latest`) *(build ZIP + Stages 1–6 CI)* | Scripts `build_rust.py` / `build_apk.py` mặc định đường dẫn Windows (hỗ trợ env override một phần SDK/Java) |
+| **Hệ điều hành** | Windows 10/11, Linux (`ubuntu-latest`) hoặc macOS *(full build + đủ 7 stage)* | `build_rust.py`, `build_apk.py`, `verify_all.py` tự nhận diện NDK/SDK/JDK theo hệ điều hành |
 | **Python** | Python 3.12+ | Không cần package pip ngoài (chỉ dùng thư viện chuẩn Python) |
 | **Rust toolchain** | `rustc` với target `aarch64-linux-android` | Zero external crates (thuần `std`) |
 | **Android NDK** | NDK `29.0.14206865` (`aarch64-linux-android29-clang`, `clang++`, `llvm-strip`) | Link C++ Zygisk với `-static-libstdc++ -llog -ldl` |
@@ -86,5 +86,5 @@ Kết quả:
 
 ---
 
-## 4. Lưu ý cho người muốn sửa `build_rust.py` / `build_apk.py` trên Linux
-Hiện tại các hằng số đường dẫn NDK/SDK/JDK mặc định trong `build_rust.py` (`.cmd` / `.exe`) và `build_apk.py` (`build-tools/34.0.0/*.bat`) được viết cho môi trường Windows host của maintainer. Nếu bạn muốn cross-compile Rust/APK trên Linux, cần điều chỉnh tên binary toolchain bỏ đuôi `.cmd`/`.bat`/`.exe` hoặc dùng trực tiếp GitHub Actions chỉ đóng gói ZIP & kiểm thử POSIX (`--skip-apk`).
+## 4. Build tái lập tự động trên Linux CI (`ubuntu-latest`)
+Hai workflow `.github/workflows/ci.yml` và `.github/workflows/release.yml` tự thiết lập Rust `aarch64-linux-android`, Android SDK `android-34` / `build-tools;34.0.0` và Android NDK, sau đó biên dịch sạch từ mã nguồn (`build_rust.py` → `build_apk.py` → `build_zip.py` → `verify_all.py` đủ 7 stage) mà không cần lưu nhị phân dựng sẵn trong Git.
