@@ -1,0 +1,20 @@
+* text=auto eol=lf
+*.sh text eol=lf
+*.py text eol=lf
+*.rs text eol=lf
+*.cpp text eol=lf
+*.hpp text eol=lf
+*.java text eol=lf
+*.xml text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.tsv text eol=lf
+*.conf text eol=lf
+*.list text eol=lf
+*.prop text eol=lf
+*.yml text eol=lf
+*.so binary
+*.dex binary
+*.apk binary
+*.zip binary
+module/bin/kgx-core binary

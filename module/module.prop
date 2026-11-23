@@ -2,5 +2,6 @@ id=ksu_ultimate_gaming_x
 name=KSU Ultimate Gaming X
 version=v1.0.0
 versionCode=100
-author=KSU Ultimate Gaming X Engineering
+author=hangothanhh
 description=KernelSU gaming engine: whole-system flagship spoof with PLT+JNI Play Integrity Shield, Samsung GOS Neutralizer, Exynos Sweet-Spot & Bypass Charging, External Display Screen-Off, Rust native daemon/overlay telemetry & Material 3 App.
+updateJson=https://raw.githubusercontent.com/hangothanhh/ksu-ultimate-gaming-x/main/update.json
